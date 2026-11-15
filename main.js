@@ -793,6 +793,7 @@ function updateTimeDisplay(seconds) {
 function clearSearchInfo() {
     const searchInfo = document.getElementById('search-info');
     if (searchInfo) searchInfo.style.display = 'none';
+    if (boardUI) boardUI.setArrow(null);
 }
 
 function updateSearchInfo(info) {
@@ -825,6 +826,10 @@ function updateSearchInfo(info) {
         summaryEl.innerHTML = `${depth}. ${score} <span class="search-label">nodes:</span> ${nodesStr} <span class="search-label">nps:</span> ${npsStr}`;
     }
     if (pvEl) pvEl.textContent = info.pvStr || '-';
+    if (boardUI && showAnalysis && !editMode && info.pvStr) {
+        const mv = /^\s*(\d+)\s*[-x]\s*(\d+)/.exec(info.pvStr);
+        if (mv) boardUI.setArrow(parseInt(mv[1], 10), parseInt(mv[2], 10));
+    }
 
     // Root moves display
     let rootMovesEl = document.getElementById('search-root-moves');

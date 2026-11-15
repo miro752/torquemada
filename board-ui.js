@@ -141,6 +141,8 @@ export class BoardUI {
         // Personnalisation (couleurs du damier et des pions), gardée dans le navigateur
         this.pieceStyle = 'relief';
         this.showNumbers = false;
+        this.showArrow = true;
+        this.arrow = null;   // {from,to} flèche du meilleur coup
         this._loadCustom();
         this._buildCustomPanel();
 
@@ -170,6 +172,13 @@ export class BoardUI {
         this.black = black >>> 0;
         this.kings = kings >>> 0;
         this.whiteToMove = whiteToMove;
+        this.arrow = null;
+        this.render();
+    }
+
+    /** Flèche indiquant le meilleur coup (cases 1-32) ; setArrow(null) l'efface */
+    setArrow(from, to) {
+        this.arrow = (from && to) ? { from, to } : null;
         this.render();
     }
 
@@ -355,6 +364,11 @@ export class BoardUI {
             this._drawPiece(movingPieceCurrent, movingPieceIsWhite, movingPieceIsKing);
         }
 
+        if (this.showArrow && this.lastMove && this.lastMove.from && this.lastMove.to && this.lastMove.from !== this.lastMove.to) {
+            this._drawArrow(this.lastMove.from, this.lastMove.to, '#ffb020', '#5a3500');   // dernier coup joué : orange
+        }
+        if (this.arrow && this.showArrow) this._drawArrow(this.arrow.from, this.arrow.to);   // meilleur coup : vert
+
         // Draw square numbers (for debugging/learning)
         if (this.showNumbers) this._drawSquareNumbers();
     }
@@ -416,6 +430,26 @@ export class BoardUI {
         // Draw piece body
         const base = isWhite ? this.colors.whitePiece : this.colors.blackPiece;
         const edge = isWhite ? this.colors.whitePieceStroke : this.colors.blackPieceStroke;
+        if (this.pieceStyle === 'disc3d') {
+            const t = radius * 0.2;       // épaisseur du pion
+            const disc = (cx, cy) => {
+                const side = this._shade(base, -0.5);
+                ctx.fillStyle = side; ctx.strokeStyle = this._shade(base, -0.75); ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(cx, cy + t, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                ctx.fillRect(cx - radius, cy, radius * 2, t);
+                ctx.beginPath(); ctx.moveTo(cx - radius, cy); ctx.lineTo(cx - radius, cy + t);
+                ctx.moveTo(cx + radius, cy); ctx.lineTo(cx + radius, cy + t); ctx.stroke();
+                const g = ctx.createRadialGradient(cx - radius * 0.3, cy - radius * 0.3, radius * 0.05, cx, cy, radius);
+                g.addColorStop(0, this._shade(base, 0.35)); g.addColorStop(1, base);
+                ctx.fillStyle = g; ctx.strokeStyle = this._shade(base, -0.55); ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                ctx.strokeStyle = this._shade(base, -0.25); ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.arc(cx, cy, radius * 0.72, 0, Math.PI * 2); ctx.stroke();
+            };
+            if (isKing) { disc(x, y + t * 0.6); disc(x, y - t * 1.1); } else disc(x, y - t * 0.2);
+            ctx.globalAlpha = prevAlpha;
+            return;
+        }
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         if (this.pieceStyle === 'relief') {
@@ -455,6 +489,37 @@ export class BoardUI {
         ctx.globalAlpha = prevAlpha;
     }
 
+    _drawArrow(fromSq, toSq, fill = '#2ee62e', outline = '#0b3d0b') {
+        const a = squareToRowCol(fromSq), b = squareToRowCol(toSq);
+        const ctx = this.ctx, s = this.squareSize;
+        const pos = (q) => ({ x: (this.flipped ? 7 - q.col : q.col) * s + s / 2, y: (this.flipped ? 7 - q.row : q.row) * s + s / 2 });
+        const p0 = pos(a), p1 = pos(b);
+        const dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy);
+        if (len < 1) return;
+        const ux = dx / len, uy = dy / len;
+        const sx = p0.x + ux * s * 0.18, sy = p0.y + uy * s * 0.18;   // part un peu du centre du pion
+        const ex = p1.x - ux * s * 0.12, ey = p1.y - uy * s * 0.12;
+        const head = s * 0.34, w = s * 0.075;
+        const bx = ex - ux * head, by = ey - uy * head;
+        ctx.save();
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        const path = () => {
+            ctx.beginPath();
+            ctx.moveTo(sx, sy); ctx.lineTo(bx, by);
+        };
+        for (const [col, extra] of [[outline, 3], [fill, 0]]) {
+            ctx.strokeStyle = col; ctx.lineWidth = w + extra * 2;
+            path(); ctx.stroke();
+            ctx.fillStyle = col;
+            ctx.beginPath();
+            ctx.moveTo(ex + ux * extra, ey + uy * extra);
+            ctx.lineTo(bx - uy * (head * 0.5 + extra), by + ux * (head * 0.5 + extra));
+            ctx.lineTo(bx + uy * (head * 0.5 + extra), by - ux * (head * 0.5 + extra));
+            ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
+    }
+
     // ---------- Personnalisation ----------
     _loadCustom() {
         try {
@@ -463,6 +528,7 @@ export class BoardUI {
                 for (const k of ['lightSquare', 'darkSquare', 'whitePiece', 'blackPiece', 'kingMark']) if (o[k]) this.colors[k] = o[k];
                 if (o.pieceStyle) this.pieceStyle = o.pieceStyle;
                 if (typeof o.showNumbers === 'boolean') this.showNumbers = o.showNumbers;
+                if (typeof o.showArrow === 'boolean') this.showArrow = o.showArrow;
             }
         } catch (e) {}
         this._deriveStrokes();
@@ -470,7 +536,7 @@ export class BoardUI {
     _saveCustom() {
         try {
             const c = this.colors;
-            localStorage.setItem('damas.custom', JSON.stringify({ lightSquare: c.lightSquare, darkSquare: c.darkSquare, whitePiece: c.whitePiece, blackPiece: c.blackPiece, kingMark: c.kingMark, pieceStyle: this.pieceStyle, showNumbers: this.showNumbers }));
+            localStorage.setItem('damas.custom', JSON.stringify({ lightSquare: c.lightSquare, darkSquare: c.darkSquare, whitePiece: c.whitePiece, blackPiece: c.blackPiece, kingMark: c.kingMark, pieceStyle: this.pieceStyle, showNumbers: this.showNumbers, showArrow: this.showArrow }));
         } catch (e) {}
     }
     _shade(hex, f) { // f<0 assombrit, f>0 éclaircit
@@ -492,19 +558,25 @@ export class BoardUI {
         const rows = [['lightSquare', 'Cases claires'], ['darkSquare', 'Cases foncées'], ['whitePiece', 'Pions blancs'], ['blackPiece', 'Pions noirs'], ['kingMark', 'Marque des dames']];
         let html = '<b>Personnaliser</b><div style="height:8px"></div>';
         for (const [k, l] of rows) html += `<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">${l}<input type="color" data-k="${k}" style="margin-left:12px;width:48px;height:28px;padding:0;border:1px solid #888"></label>`;
-        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Style des pions<select data-k="pieceStyle" style="margin-left:12px"><option value="relief">Relief</option><option value="flat">Plat</option><option value="ring">Anneau</option></select></label>';
+        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Style des pions<select data-k="pieceStyle" style="margin-left:12px"><option value="relief">Relief</option><option value="flat">Plat</option><option value="ring">Anneau</option><option value="disc3d">Disque 3D</option></select></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Numéros des cases (1-32)<input type="checkbox" data-k="showNumbers" style="margin-left:12px;width:20px;height:20px"></label>';
-        html += '<div style="height:8px"></div><button data-reset style="padding:5px 10px;cursor:pointer">Couleurs par défaut</button>';
+        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Flèches (dernier coup / meilleur coup)<input type="checkbox" data-k="showArrow" style="margin-left:12px;width:20px;height:20px"></label>';
+        html += '<div style="height:8px"></div><button data-photo style="padding:5px 10px;cursor:pointer;margin-right:6px">Style photo</button><button data-reset style="padding:5px 10px;cursor:pointer">Couleurs par défaut</button>';
         panel.innerHTML = html;
-        const sync = () => panel.querySelectorAll('[data-k]').forEach(el => { if (el.dataset.k === 'showNumbers') el.checked = this.showNumbers; else el.value = el.dataset.k === 'pieceStyle' ? this.pieceStyle : this.colors[el.dataset.k]; });
+        const sync = () => panel.querySelectorAll('[data-k]').forEach(el => { if (el.dataset.k === 'showNumbers') el.checked = this.showNumbers; else if (el.dataset.k === 'showArrow') el.checked = this.showArrow; else el.value = el.dataset.k === 'pieceStyle' ? this.pieceStyle : this.colors[el.dataset.k]; });
         panel.addEventListener('input', (e) => {
             const k = e.target.dataset && e.target.dataset.k; if (!k) return;
-            if (k === 'showNumbers') this.showNumbers = e.target.checked; else if (k === 'pieceStyle') this.pieceStyle = e.target.value; else this.colors[k] = e.target.value;
+            if (k === 'showNumbers') this.showNumbers = e.target.checked; else if (k === 'showArrow') this.showArrow = e.target.checked; else if (k === 'pieceStyle') this.pieceStyle = e.target.value; else this.colors[k] = e.target.value;
             this._deriveStrokes(); this._saveCustom(); this.render();
         });
         panel.querySelector('[data-reset]').addEventListener('click', () => {
             for (const k in DEF) { if (k === 'pieceStyle') this.pieceStyle = DEF[k]; else this.colors[k] = DEF[k]; }
-            this.showNumbers = false; this._deriveStrokes(); this._saveCustom(); sync(); this.render();
+            this.showNumbers = false; this.showArrow = true; this._deriveStrokes(); this._saveCustom(); sync(); this.render();
+        });
+        panel.querySelector('[data-photo]').addEventListener('click', () => {
+            Object.assign(this.colors, { lightSquare: '#1d1d3d', darkSquare: '#dc1f46', whitePiece: '#b9b5ea', blackPiece: '#e51c1c', kingMark: '#FFD700' });
+            this.pieceStyle = 'disc3d'; this.showNumbers = true; this.showArrow = true;
+            this._deriveStrokes(); this._saveCustom(); sync(); this.render();
         });
         btn.addEventListener('click', () => { sync(); panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; });
         document.body.appendChild(panel); document.body.appendChild(btn);
