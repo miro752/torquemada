@@ -78,7 +78,7 @@ async function init() {
         }
 
         // Load NN model
-        updateLoadingStatus('Cargando red neuronal...');
+        updateLoadingStatus('Chargement du réseau de neurones...');
         try {
             const nnData = await loadNNModelFile('./models/model_007.bin');
             await engine.loadNNModel(nnData);
@@ -120,7 +120,7 @@ async function init() {
         }
 
         // Create modules
-        updateLoadingStatus('Iniciando partida...');
+        updateLoadingStatus('Démarrage de la partie...');
         boardUI = new BoardUI(canvas);
         gameState = new GameState(engine);
         searchManager = new SearchManager(engine);
@@ -149,7 +149,7 @@ async function init() {
         updatePlayButton();
 
         // Update status
-        statusEl.textContent = 'Nueva partida';
+        statusEl.textContent = 'Nouvelle partie';
 
         // Hide loading, show game
         if (loadingEl) loadingEl.style.display = 'none';
@@ -160,7 +160,7 @@ async function init() {
 
     } catch (err) {
         console.error('Initialization failed:', err);
-        updateLoadingStatus(`Error: ${err.message}`);
+        updateLoadingStatus(`Erreur : ${err.message}`);
     }
 }
 
@@ -248,7 +248,7 @@ function wireGameStateEvents() {
         updateUndoRedoButtons();
         updatePlayButton();
         updateOpeningName(gameState.board);
-        updateStatus('Partida cargada');
+        updateStatus('Partie chargée');
     });
 
     gameState.addEventListener('legalMovesUpdated', (e) => {
@@ -272,7 +272,7 @@ function wireSearchManagerEvents() {
 
     searchManager.addEventListener('searchStart', (e) => {
         if (e.detail.type === 'think') {
-            updateStatus('Motor pensando...');
+            updateStatus('Le moteur réfléchit...');
         }
         updatePlayButton();
         updateUndoRedoButtons();
@@ -690,9 +690,9 @@ function updateTimePerMoveLabel(seconds) {
     if (!el) return;
     let text;
     if (seconds >= 1 && seconds === Math.floor(seconds)) {
-        text = `+${seconds}s/mov`;
+        text = `+${seconds}s/coup`;
     } else {
-        text = `+${parseFloat(seconds.toFixed(1))}s/mov`;
+        text = `+${parseFloat(seconds.toFixed(1))}s/coup`;
     }
     el.textContent = text;
 }
@@ -807,7 +807,7 @@ function updateSearchInfo(info) {
     if (summaryEl) {
         let depth = info.depth || '-';
         if (info.phase) {
-            const phaseLabel = info.phase === 'winning' ? 'ganando' : info.phase === 'losing' ? 'perdiendo' : info.phase;
+            const phaseLabel = info.phase === 'winning' ? 'gagnant' : info.phase === 'losing' ? 'perdant' : info.phase;
             depth += ` (${phaseLabel})`;
         }
         const score = info.scoreStr || '-';
@@ -870,7 +870,7 @@ function updateSearchInfo(info) {
             const q = (m.q / 100).toFixed(1);
             return `${m.notation}: ${pct}% (${q})`;
         });
-        bookMovesEl.innerHTML = `<span class="search-label">libro:</span> ${parts.join('  ')}`;
+        bookMovesEl.innerHTML = `<span class="search-label">livre :</span> ${parts.join('  ')}`;
         bookMovesEl.style.display = '';
     } else if (bookMovesEl) {
         bookMovesEl.style.display = 'none';
@@ -965,19 +965,19 @@ function updateMoveHistory() {
 function showGameOver(winner, reason) {
     let message;
     if (winner === 'draw') {
-        message = reason ? `¡Tablas — ${reason}!` : '¡Tablas!';
+        message = reason ? `Partie nulle — ${reason} !` : 'Partie nulle !';
     } else {
-        const name = winner === 'white' ? 'blancas' : 'negras';
-        message = reason ? `¡Ganan ${name} (${reason})!` : `¡Ganan ${name}!`;
+        const name = winner === 'white' ? 'blancs' : 'noirs';
+        message = reason ? `Les ${name} gagnent (${reason}) !` : `Les ${name} gagnent !`;
     }
 
     // Update status text
     if (winner === 'draw') {
-        const msg = reason ? `¡Tablas — ${reason}!` : '¡Tablas!';
+        const msg = reason ? `Partie nulle — ${reason} !` : 'Partie nulle !';
         updateStatus(msg);
     } else {
-        const winnerName = winner === 'white' ? 'blancas' : 'negras';
-        updateStatus(`¡Ganan ${winnerName}!`);
+        const winnerName = winner === 'white' ? 'blancs' : 'noirs';
+        updateStatus(`Les ${winnerName} gagnent !`);
     }
 
     console.log(message);
@@ -996,13 +996,13 @@ function showGameOver(winner, reason) {
 
         let title, resultMsg;
         if (winner === 'draw') {
-            title = 'Tablas';
+            title = 'Partie nulle';
             resultMsg = message;
         } else if (winner === turnController.humanColor) {
-            title = '¡Ganaste!';
+            title = 'Vous avez gagné !';
             resultMsg = message;
         } else {
-            title = 'Perdiste';
+            title = 'Vous avez perdu';
             resultMsg = message;
         }
         setTimeout(() => showMatchResultDialog(title, resultMsg), 100);
@@ -1106,11 +1106,11 @@ function matchResign() {
             date: new Date().toISOString(),
             moves: gameState.history.map(h => h.notation),
             result: engineColor,
-            resultReason: 'abandono',
+            resultReason: 'abandon',
             playerColor: turnController.humanColor
         });
         matchStats = computeStats();
-        showMatchResultDialog('Abandono', 'Has abandonado la partida.');
+        showMatchResultDialog('Abandon', 'Vous avez abandonné la partie.');
     });
 }
 
@@ -1146,19 +1146,19 @@ function showHistoryDialog() {
     updateHistoryButtons();
 
     if (games.length === 0) {
-        listEl.innerHTML = '<div class="history-empty">No hay partidas registradas.</div>';
+        listEl.innerHTML = '<div class="history-empty">Aucune partie enregistrée.</div>';
     } else {
         let html = '';
         for (let i = games.length - 1; i >= 0; i--) {
             const g = games[i];
             const d = new Date(g.date);
-            const dateStr = d.toLocaleDateString('es', { month: 'short', day: 'numeric' });
-            const timeStr = d.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+            const dateStr = d.toLocaleDateString('fr', { month: 'short', day: 'numeric' });
+            const timeStr = d.toLocaleTimeString('fr', { hour: '2-digit', minute: '2-digit' });
             const movesPreview = g.moves.slice(0, 6).join(' ') + (g.moves.length > 6 ? ' ...' : '');
 
             let resultLabel, resultClass;
             if (g.result === 'draw') {
-                resultLabel = 'T';
+                resultLabel = 'N';
                 resultClass = 'draw';
             } else if (g.result === g.playerColor) {
                 resultLabel = 'V';
@@ -1217,7 +1217,7 @@ function setupHistoryDialogHandlers() {
 
     document.getElementById('btn-history-delete').addEventListener('click', () => {
         if (!selectedGameId) return;
-        if (!confirm('¿Borrar esta partida del historial?')) return;
+        if (!confirm('Supprimer cette partie de l\'historique ?')) return;
         deleteGame(selectedGameId);
         selectedGameId = null;
         showHistoryDialog();
@@ -1277,12 +1277,12 @@ async function exitMatchPlay() {
 async function showDownloadDialog(type = 'dtm') {
     const dialog = document.getElementById('download-dialog');
     if (!dialog) {
-        alert('Descarga de finales no disponible');
+        alert('Téléchargement des finales indisponible');
         return;
     }
 
     if (!tablebaseLoader || !tablebaseLoader.isAvailable()) {
-        alert('El almacenamiento de finales requiere OPFS (Origin Private File System), que necesita HTTPS o localhost.');
+        alert('Le stockage des finales demande OPFS, qui nécessite HTTPS ou localhost.');
         return;
     }
 
@@ -1295,8 +1295,8 @@ async function showDownloadDialog(type = 'dtm') {
 
     if (titleEl) {
         titleEl.textContent = type === 'cwdl'
-            ? 'Descargando finales WDL 6-8 piezas'
-            : 'Descargando finales DTM 5 piezas';
+            ? 'Téléchargement des finales WDL 6-8 pièces'
+            : 'Téléchargement des finales DTM 5 pièces';
     }
 
     let cancelled = false;
@@ -1314,18 +1314,18 @@ async function showDownloadDialog(type = 'dtm') {
             if (cancelled) return;
             const pct = Math.round((loaded / total) * 100);
             if (progressEl) progressEl.style.width = `${pct}%`;
-            if (statusEl) statusEl.textContent = `Descargando: ${file} (${loaded}/${total})`;
+            if (statusEl) statusEl.textContent = `Téléchargement : ${file} (${loaded}/${total})`;
         });
 
         if (!cancelled) {
-            statusEl.textContent = '¡Listo! Se usarán automáticamente.';
+            statusEl.textContent = 'Terminé ! Elles seront utilisées automatiquement.';
             setTimeout(() => {
                 dialog.style.display = 'none';
                 window.location.reload();
             }, 1500);
         }
     } catch (err) {
-        if (statusEl) statusEl.textContent = `Error: ${err.message}`;
+        if (statusEl) statusEl.textContent = `Erreur : ${err.message}`;
     }
 }
 
@@ -1480,10 +1480,10 @@ function setupEventHandlers() {
     const clearTbBtn = document.getElementById('btn-clear-tb');
     if (clearTbBtn) clearTbBtn.addEventListener('click', async () => {
         if (!tablebaseLoader || !tablebaseLoader.isAvailable()) {
-            alert('No hay finales almacenados.');
+            alert('Aucune finale enregistrée.');
             return;
         }
-        if (!confirm('¿Borrar todos los finales descargados?')) return;
+        if (!confirm('Supprimer toutes les finales téléchargées ?')) return;
         await tablebaseLoader.clearTablebases();
         // Also remove legacy "tablebases" directory if it exists
         try {
@@ -1492,7 +1492,7 @@ function setupEventHandlers() {
         } catch (e) {
             // Ignore if it doesn't exist
         }
-        alert('Finales borrados.');
+        alert('Finales supprimées.');
         window.location.reload();
     });
 

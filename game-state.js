@@ -336,7 +336,7 @@ export class GameState extends EventTarget {
         if (this.legalMoves.length === 0) {
             this._setGameOver(
                 this.board.whiteToMove ? 'black' : 'white',
-                'sin jugadas'
+                'plus de coups'
             );
             this.dispatchEvent(new CustomEvent('legalMovesUpdated', {
                 detail: { moves: this.legalMoves }
@@ -346,7 +346,7 @@ export class GameState extends EventTarget {
 
         // Check for 60-move rule
         if (this.board.nReversible >= 60) {
-            this._setGameOver('draw', '60 jugadas sin progreso');
+            this._setGameOver('draw', '60 coups sans progrès');
             this.dispatchEvent(new CustomEvent('legalMovesUpdated', {
                 detail: { moves: this.legalMoves }
             }));
@@ -356,7 +356,7 @@ export class GameState extends EventTarget {
         // Check for threefold repetition
         const key = this._positionKey(this.board);
         if ((this.positionCounts.get(key) || 0) >= 3) {
-            this._setGameOver('draw', 'triple repetición');
+            this._setGameOver('draw', 'triple répétition');
             this.dispatchEvent(new CustomEvent('legalMovesUpdated', {
                 detail: { moves: this.legalMoves }
             }));
