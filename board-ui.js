@@ -142,6 +142,8 @@ export class BoardUI {
         this.pieceStyle = 'relief';
         this.showNumbers = false;
         this.showArrow = true;
+        this.boardSize = 560;     // taille du damier en pixels (réglable)
+        this.focusMode = false;   // mode grand damier : panneaux masqués
         this.arrow = null;   // {from,to} flèche du meilleur coup
         this._loadCustom();
         this._buildCustomPanel();
@@ -160,8 +162,34 @@ export class BoardUI {
             }
         });
 
+        window.addEventListener('resize', () => this.applySize());
+        this.applySize();
+        setTimeout(() => this.applySize(), 400);
+        setTimeout(() => this.applySize(), 1500);
+
         // Initial render
         this.render();
+    }
+
+    /** Adapte la taille du damier (réglage + espace disponible) et la netteté de l'écran */
+    applySize() {
+        const c = this.canvas, dpr = window.devicePixelRatio || 1;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const wide = vw > 1000;
+        document.body.classList.toggle('focus-board', this.focusMode);
+        // cadre + barre d'évaluation : mesurés sur la page (valeur de secours : 70 px)
+        const cont = c.parentElement;
+        let frame = 70;
+        if (cont && c.offsetWidth > 0) frame = Math.max(30, cont.getBoundingClientRect().width - c.getBoundingClientRect().width);
+        let avail = wide ? (this.focusMode ? vw - 190 - 90 : vw - 190 - 300 - 100) : vw - 26;
+        avail -= frame;
+        let size = this.focusMode ? avail : Math.min(this.boardSize, avail);
+        if (this.focusMode && wide) size = Math.min(size, vh - 150);
+        if (!wide && this.focusMode) size = Math.min(size, Math.max(vh - 260, 260));
+        size = Math.max(240, Math.floor(size));
+        document.documentElement.style.setProperty('--bs', size + 'px');
+        c.style.width = size + 'px'; c.style.height = size + 'px'; c.style.maxWidth = 'none';
+        this.resize(Math.round(size * dpr));
     }
 
     /**
@@ -178,7 +206,8 @@ export class BoardUI {
 
     /** Flèche indiquant le meilleur coup (cases 1-32) ; setArrow(null) l'efface */
     setArrow(from, to) {
-        this.arrow = (from && to) ? { from, to } : null;
+        if (Array.isArray(from)) this.arrow = from.length >= 2 ? { from: from[0], to: from[from.length - 1], path: from } : null;
+        else this.arrow = (from && to) ? { from, to, path: [from, to] } : null;
         this.render();
     }
 
@@ -206,8 +235,13 @@ export class BoardUI {
     /**
      * Set last move (for highlighting)
      */
-    setLastMove(from, to) {
-        this.lastMove = { from, to };
+    setLastMove(from, to, notation) {
+        let path = [from, to];
+        if (typeof notation === 'string') {
+            const nums = (notation.match(/\d+/g) || []).map(Number);
+            if (nums.length >= 2 && nums.every(n => n >= 1 && n <= 32)) path = nums;
+        }
+        this.lastMove = { from, to, path };
         this.render();
     }
 
@@ -365,9 +399,9 @@ export class BoardUI {
         }
 
         if (this.showArrow && this.lastMove && this.lastMove.from && this.lastMove.to && this.lastMove.from !== this.lastMove.to) {
-            this._drawArrow(this.lastMove.from, this.lastMove.to, '#ffb020', '#5a3500');   // dernier coup joué : orange
+            this._drawArrow(this.lastMove.path || [this.lastMove.from, this.lastMove.to], '#ffb020', '#5a3500');   // dernier coup joué : orange
         }
-        if (this.arrow && this.showArrow) this._drawArrow(this.arrow.from, this.arrow.to);   // meilleur coup : vert
+        if (this.arrow && this.showArrow) this._drawArrow(this.arrow.path || [this.arrow.from, this.arrow.to]);   // meilleur coup : vert
 
         // Draw square numbers (for debugging/learning)
         if (this.showNumbers) this._drawSquareNumbers();
@@ -430,6 +464,11 @@ export class BoardUI {
         // Draw piece body
         const base = isWhite ? this.colors.whitePiece : this.colors.blackPiece;
         const edge = isWhite ? this.colors.whitePieceStroke : this.colors.blackPieceStroke;
+        if (['jeton', 'bouton', 'gemme', 'verre'].includes(this.pieceStyle)) {
+            this._drawFancyPiece(x, y, radius, base, edge, isKing);
+            ctx.globalAlpha = prevAlpha;
+            return;
+        }
         if (this.pieceStyle === 'disc3d') {
             const t = radius * 0.2;       // épaisseur du pion
             const disc = (cx, cy) => {
@@ -489,35 +528,109 @@ export class BoardUI {
         ctx.globalAlpha = prevAlpha;
     }
 
-    _drawArrow(fromSq, toSq, fill = '#2ee62e', outline = '#0b3d0b') {
-        const a = squareToRowCol(fromSq), b = squareToRowCol(toSq);
+    /** Dessine une flèche qui suit les cases du chemin (prises multiples : la ligne passe par chaque case d'arrivée). */
+    _drawArrow(path, fill = '#2ee62e', outline = '#0b3d0b') {
+        if (!path || path.length < 2) return;
         const ctx = this.ctx, s = this.squareSize;
-        const pos = (q) => ({ x: (this.flipped ? 7 - q.col : q.col) * s + s / 2, y: (this.flipped ? 7 - q.row : q.row) * s + s / 2 });
-        const p0 = pos(a), p1 = pos(b);
-        const dx = p1.x - p0.x, dy = p1.y - p0.y, len = Math.hypot(dx, dy);
-        if (len < 1) return;
-        const ux = dx / len, uy = dy / len;
-        const sx = p0.x + ux * s * 0.18, sy = p0.y + uy * s * 0.18;   // part un peu du centre du pion
-        const ex = p1.x - ux * s * 0.12, ey = p1.y - uy * s * 0.12;
-        const head = s * 0.34, w = s * 0.075;
-        const bx = ex - ux * head, by = ey - uy * head;
+        const pts = path.map((sq) => {
+            const q = squareToRowCol(sq);
+            return { x: (this.flipped ? 7 - q.col : q.col) * s + s / 2, y: (this.flipped ? 7 - q.row : q.row) * s + s / 2 };
+        });
+        // pointe : on raccourcit un peu le dernier segment
+        const n = pts.length, L = pts[n - 1], P = pts[n - 2];
+        const dx = L.x - P.x, dy = L.y - P.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+        const head = s * 0.34, w = s * 0.085;
+        const tip = { x: L.x - ux * s * 0.08, y: L.y - uy * s * 0.08 };
+        const base = { x: tip.x - ux * head, y: tip.y - uy * head };
+        const first = pts[0], f1 = pts[1];
+        const fl = Math.hypot(f1.x - first.x, f1.y - first.y) || 1;
+        const start = { x: first.x + (f1.x - first.x) / fl * s * 0.18, y: first.y + (f1.y - first.y) / fl * s * 0.18 };
+        const line = [start, ...pts.slice(1, n - 1), base];
         ctx.save();
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        const path = () => {
-            ctx.beginPath();
-            ctx.moveTo(sx, sy); ctx.lineTo(bx, by);
-        };
         for (const [col, extra] of [[outline, 3], [fill, 0]]) {
             ctx.strokeStyle = col; ctx.lineWidth = w + extra * 2;
-            path(); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(line[0].x, line[0].y);
+            for (let k = 1; k < line.length; k++) ctx.lineTo(line[k].x, line[k].y);
+            ctx.stroke();
             ctx.fillStyle = col;
             ctx.beginPath();
-            ctx.moveTo(ex + ux * extra, ey + uy * extra);
-            ctx.lineTo(bx - uy * (head * 0.5 + extra), by + ux * (head * 0.5 + extra));
-            ctx.lineTo(bx + uy * (head * 0.5 + extra), by - ux * (head * 0.5 + extra));
+            ctx.moveTo(tip.x + ux * extra, tip.y + uy * extra);
+            ctx.lineTo(base.x - uy * (head * 0.5 + extra), base.y + ux * (head * 0.5 + extra));
+            ctx.lineTo(base.x + uy * (head * 0.5 + extra), base.y - ux * (head * 0.5 + extra));
             ctx.closePath(); ctx.fill();
         }
         ctx.restore();
+    }
+
+    // ---------- Autres types de pions ----------
+    _crown(x, y, r) {
+        const ctx = this.ctx, w = r * 0.62, hgt = r * 0.5;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x - w, y + hgt * 0.6);
+        ctx.lineTo(x - w, y - hgt * 0.5);
+        ctx.lineTo(x - w * 0.5, y + hgt * 0.05);
+        ctx.lineTo(x, y - hgt * 0.8);
+        ctx.lineTo(x + w * 0.5, y + hgt * 0.05);
+        ctx.lineTo(x + w, y - hgt * 0.5);
+        ctx.lineTo(x + w, y + hgt * 0.6);
+        ctx.closePath();
+        ctx.fillStyle = this.colors.kingMark; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(60,35,0,.85)'; ctx.stroke();
+        ctx.restore();
+    }
+    _drawFancyPiece(x, y, r, base, edge, isKing) {
+        const ctx = this.ctx, st = this.pieceStyle;
+        // ombre portée
+        ctx.beginPath(); ctx.ellipse(x + r * 0.06, y + r * 0.16, r * 1.0, r * 0.95, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fill();
+        if (st === 'jeton') {
+            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fillStyle = this._shade(base, -0.25); ctx.fill();
+            ctx.lineWidth = 1.5; ctx.strokeStyle = edge; ctx.stroke();
+            // encoches sur le bord
+            ctx.fillStyle = this._shade(base, 0.6);
+            for (let i = 0; i < 12; i++) {
+                const a = i * Math.PI / 6;
+                ctx.save(); ctx.translate(x + Math.cos(a) * r * 0.86, y + Math.sin(a) * r * 0.86); ctx.rotate(a);
+                ctx.fillRect(-r * 0.09, -r * 0.2, r * 0.18, r * 0.4); ctx.restore();
+            }
+            ctx.beginPath(); ctx.arc(x, y, r * 0.66, 0, Math.PI * 2);
+            const g = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, r * 0.05, x, y, r * 0.66);
+            g.addColorStop(0, this._shade(base, 0.35)); g.addColorStop(1, base);
+            ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = this._shade(base, -0.45); ctx.stroke();
+        } else if (st === 'bouton') {
+            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+            const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+            g.addColorStop(0, this._shade(base, 0.3)); g.addColorStop(1, this._shade(base, -0.15));
+            ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = edge; ctx.stroke();
+            ctx.beginPath(); ctx.arc(x, y, r * 0.78, 0, Math.PI * 2);
+            ctx.lineWidth = r * 0.1; ctx.strokeStyle = this._shade(base, -0.3); ctx.stroke();
+            ctx.fillStyle = this._shade(base, -0.65);
+            for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+                ctx.beginPath(); ctx.arc(x + dx * r * 0.2, y + dy * r * 0.2, r * 0.1, 0, Math.PI * 2); ctx.fill();
+            }
+        } else if (st === 'gemme') {
+            const pts = [];
+            for (let i = 0; i < 8; i++) { const a = Math.PI / 8 + i * Math.PI / 4; pts.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); }
+            ctx.beginPath(); pts.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath();
+            const g = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+            g.addColorStop(0, this._shade(base, 0.55)); g.addColorStop(0.5, base); g.addColorStop(1, this._shade(base, -0.4));
+            ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = edge; ctx.stroke();
+            ctx.beginPath(); pts.forEach(([px, py]) => { ctx.moveTo(x, y); ctx.lineTo(px, py); });
+            ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.stroke();
+            ctx.beginPath(); pts.forEach(([px, py], i) => { const qx = x + (px - x) * 0.55, qy = y + (py - y) * 0.55; i ? ctx.lineTo(qx, qy) : ctx.moveTo(qx, qy); }); ctx.closePath();
+            ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.stroke();
+        } else { // verre
+            ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+            const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.05, x, y, r * 1.05);
+            g.addColorStop(0, this._shade(base, 0.7)); g.addColorStop(0.45, base); g.addColorStop(1, this._shade(base, -0.55));
+            ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = this._shade(base, -0.6); ctx.stroke();
+            ctx.beginPath(); ctx.ellipse(x - r * 0.28, y - r * 0.4, r * 0.4, r * 0.22, -0.5, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fill();
+        }
+        if (isKing) this._crown(x, y + r * 0.04, r);
     }
 
     // ---------- Personnalisation ----------
@@ -529,6 +642,8 @@ export class BoardUI {
                 if (o.pieceStyle) this.pieceStyle = o.pieceStyle;
                 if (typeof o.showNumbers === 'boolean') this.showNumbers = o.showNumbers;
                 if (typeof o.showArrow === 'boolean') this.showArrow = o.showArrow;
+                if (typeof o.boardSize === 'number' && o.boardSize >= 260 && o.boardSize <= 1400) this.boardSize = o.boardSize;
+                if (typeof o.focusMode === 'boolean') this.focusMode = o.focusMode;
             }
         } catch (e) {}
         this._deriveStrokes();
@@ -536,7 +651,7 @@ export class BoardUI {
     _saveCustom() {
         try {
             const c = this.colors;
-            localStorage.setItem('damas.custom', JSON.stringify({ lightSquare: c.lightSquare, darkSquare: c.darkSquare, whitePiece: c.whitePiece, blackPiece: c.blackPiece, kingMark: c.kingMark, pieceStyle: this.pieceStyle, showNumbers: this.showNumbers, showArrow: this.showArrow }));
+            localStorage.setItem('damas.custom', JSON.stringify({ lightSquare: c.lightSquare, darkSquare: c.darkSquare, whitePiece: c.whitePiece, blackPiece: c.blackPiece, kingMark: c.kingMark, pieceStyle: this.pieceStyle, showNumbers: this.showNumbers, showArrow: this.showArrow, boardSize: this.boardSize, focusMode: this.focusMode }));
         } catch (e) {}
     }
     _shade(hex, f) { // f<0 assombrit, f>0 éclaircit
@@ -553,25 +668,36 @@ export class BoardUI {
         const btn = document.createElement('button');
         btn.id = 'custom-btn'; btn.textContent = '\u{1F3A8} Couleurs';
         btn.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:9999;padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fff;color:#222;font:14px sans-serif;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3)';
+        const zoomBtn = document.createElement('button');
+        zoomBtn.id = 'zoom-btn'; zoomBtn.textContent = this.focusMode ? '\u{1F50D} Réduire' : '\u{1F50D} Agrandir';
+        zoomBtn.style.cssText = btn.style.cssText + ';right:128px';
+        zoomBtn.addEventListener('click', () => {
+            this.focusMode = !this.focusMode;
+            zoomBtn.textContent = this.focusMode ? '\u{1F50D} Réduire' : '\u{1F50D} Agrandir';
+            this._saveCustom(); sync(); this.applySize();
+        });
         const panel = document.createElement('div');
         panel.style.cssText = 'position:fixed;right:12px;bottom:56px;z-index:9999;display:none;padding:12px 14px;border-radius:10px;border:1px solid #888;background:#fff;color:#222;font:14px sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.35);min-width:230px';
         const rows = [['lightSquare', 'Cases claires'], ['darkSquare', 'Cases foncées'], ['whitePiece', 'Pions blancs'], ['blackPiece', 'Pions noirs'], ['kingMark', 'Marque des dames']];
         let html = '<b>Personnaliser</b><div style="height:8px"></div>';
         for (const [k, l] of rows) html += `<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">${l}<input type="color" data-k="${k}" style="margin-left:12px;width:48px;height:28px;padding:0;border:1px solid #888"></label>`;
-        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Style des pions<select data-k="pieceStyle" style="margin-left:12px"><option value="relief">Relief</option><option value="flat">Plat</option><option value="ring">Anneau</option><option value="disc3d">Disque 3D</option></select></label>';
+        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Style des pions<select data-k="pieceStyle" style="margin-left:12px"><option value="relief">Relief</option><option value="flat">Plat</option><option value="ring">Anneau</option><option value="disc3d">Disque 3D</option><option value="jeton">Jeton</option><option value="bouton">Bouton</option><option value="gemme">Gemme</option><option value="verre">Verre</option></select></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Numéros des cases (1-32)<input type="checkbox" data-k="showNumbers" style="margin-left:12px;width:20px;height:20px"></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Flèches (dernier coup / meilleur coup)<input type="checkbox" data-k="showArrow" style="margin-left:12px;width:20px;height:20px"></label>';
+        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Taille du damier<input type="range" data-k="boardSize" min="300" max="1000" step="10" style="margin-left:12px;width:120px"></label>';
+        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Grand damier (masque les panneaux)<input type="checkbox" data-k="focusMode" style="margin-left:12px;width:20px;height:20px"></label>';
         html += '<div style="height:8px"></div><button data-photo style="padding:5px 10px;cursor:pointer;margin-right:6px">Style photo</button><button data-reset style="padding:5px 10px;cursor:pointer">Couleurs par défaut</button>';
         panel.innerHTML = html;
-        const sync = () => panel.querySelectorAll('[data-k]').forEach(el => { if (el.dataset.k === 'showNumbers') el.checked = this.showNumbers; else if (el.dataset.k === 'showArrow') el.checked = this.showArrow; else el.value = el.dataset.k === 'pieceStyle' ? this.pieceStyle : this.colors[el.dataset.k]; });
+        const sync = () => panel.querySelectorAll('[data-k]').forEach(el => { if (el.dataset.k === 'showNumbers') el.checked = this.showNumbers; else if (el.dataset.k === 'showArrow') el.checked = this.showArrow; else if (el.dataset.k === 'focusMode') el.checked = this.focusMode; else if (el.dataset.k === 'boardSize') el.value = this.boardSize; else el.value = el.dataset.k === 'pieceStyle' ? this.pieceStyle : this.colors[el.dataset.k]; });
         panel.addEventListener('input', (e) => {
             const k = e.target.dataset && e.target.dataset.k; if (!k) return;
-            if (k === 'showNumbers') this.showNumbers = e.target.checked; else if (k === 'showArrow') this.showArrow = e.target.checked; else if (k === 'pieceStyle') this.pieceStyle = e.target.value; else this.colors[k] = e.target.value;
-            this._deriveStrokes(); this._saveCustom(); this.render();
+            if (k === 'showNumbers') this.showNumbers = e.target.checked; else if (k === 'showArrow') this.showArrow = e.target.checked; else if (k === 'focusMode') this.focusMode = e.target.checked; else if (k === 'boardSize') this.boardSize = parseInt(e.target.value, 10); else if (k === 'pieceStyle') this.pieceStyle = e.target.value; else this.colors[k] = e.target.value;
+            this._deriveStrokes(); this._saveCustom();
+            if (k === 'focusMode' || k === 'boardSize') { this.applySize(); zoomBtn.textContent = this.focusMode ? '\u{1F50D} Réduire' : '\u{1F50D} Agrandir'; } else this.render();
         });
         panel.querySelector('[data-reset]').addEventListener('click', () => {
             for (const k in DEF) { if (k === 'pieceStyle') this.pieceStyle = DEF[k]; else this.colors[k] = DEF[k]; }
-            this.showNumbers = false; this.showArrow = true; this._deriveStrokes(); this._saveCustom(); sync(); this.render();
+            this.showNumbers = false; this.showArrow = true; this.boardSize = 560; this.focusMode = false; this._deriveStrokes(); this._saveCustom(); sync(); this.applySize(); zoomBtn.textContent = '\u{1F50D} Agrandir';
         });
         panel.querySelector('[data-photo]').addEventListener('click', () => {
             Object.assign(this.colors, { lightSquare: '#1d1d3d', darkSquare: '#dc1f46', whitePiece: '#b9b5ea', blackPiece: '#e51c1c', kingMark: '#FFD700' });
@@ -579,7 +705,7 @@ export class BoardUI {
             this._deriveStrokes(); this._saveCustom(); sync(); this.render();
         });
         btn.addEventListener('click', () => { sync(); panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; });
-        document.body.appendChild(panel); document.body.appendChild(btn);
+        document.body.appendChild(panel); document.body.appendChild(btn); document.body.appendChild(zoomBtn);
     }
 
     /**

@@ -894,3 +894,151 @@ body.match-play #search-info { display: none !important; }
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-secondary);
 }
+
+/* ========================================================================
+   SAM_brk — thème « Bois classique »
+   Disposition : boutons de partie à gauche, damier au centre, panneaux à droite
+   ======================================================================== */
+:root {
+    --bg-primary: #3b2414;
+    --bg-secondary: #e9d3a8;
+    --bg-card: #f1dfbf;
+    --text-primary: #4a2d12;
+    --text-secondary: #7a5430;
+    --accent: #b8681f;
+    --accent-hover: #d9822b;
+    --success: #2f7a3a;
+    --border: #b07a43;
+}
+body {
+    background:
+        repeating-linear-gradient(90deg, rgba(0,0,0,.06) 0 2px, transparent 2px 9px),
+        linear-gradient(#5a3a22, #3b2414);
+    background-attachment: fixed;
+    color: #f6e7cf;
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+}
+.loading-container { background: #3b2414; }
+.loading-content h1 { color: #f6e7cf; letter-spacing: .08em; }
+.loading-content p, #loading-status { color: #e9d3a8; }
+.spinner { border-color: #7a4a22; border-top-color: #f0b25a; }
+
+/* disposition */
+.main-content {
+    display: grid;
+    grid-template-columns: 190px minmax(320px, 600px) 300px;
+    grid-template-rows: auto auto auto auto 1fr;
+    column-gap: 1.2rem;
+    row-gap: .5rem;
+    justify-content: center;
+    align-items: start;
+    padding: 1.2rem;
+}
+.board-section { display: contents; }
+.game-toolbar {
+    grid-column: 1; grid-row: 1 / span 5;
+    flex-direction: column; align-items: stretch; justify-content: flex-start;
+    gap: .6rem; padding: 0; max-width: none; width: auto;
+}
+#match-toolbar { grid-column: 1; grid-row: 1 / span 5; }
+.board-container { grid-column: 2; grid-row: 1; max-width: none; width: 100%; }
+.opening-name { grid-column: 2; grid-row: 2; }
+.status-text { grid-column: 2; grid-row: 3; }
+.search-info { grid-column: 2; grid-row: 4; }
+.controls-section { grid-column: 3; grid-row: 1 / span 5; width: auto; }
+
+/* cadre en bois autour du damier */
+.board-container {
+    background: linear-gradient(135deg, #8a5628, #6b3f1a 60%, #7d4c21);
+    padding: 14px;
+    border-radius: 10px;
+    box-shadow: 0 8px 22px rgba(0,0,0,.55), inset 0 0 0 2px #a9743d, inset 0 0 14px rgba(0,0,0,.45);
+}
+#board { max-width: none; border-radius: 3px; box-shadow: 0 0 0 3px #4a2a10; }
+.opening-name { color: #f0d9a8; font-style: italic; text-align: center; min-height: 1.2em; }
+.status-text { color: #fff3d6; text-align: center; font-size: 1.15rem; font-weight: 700; text-shadow: 0 2px 3px rgba(0,0,0,.5); }
+.search-info {
+    background: #f1dfbf; color: #4a2d12; border: 2px solid #b07a43; border-radius: 10px; width: 100%; box-sizing: border-box;
+}
+.search-label { color: #8a5a2a; }
+.search-pv { color: #2f6b3a; }
+
+/* boutons façon pièces de bois */
+.btn {
+    background: linear-gradient(#cf9457, #9f6633);
+    color: #fff; border: 0; border-radius: 22px;
+    box-shadow: 0 3px 0 #5e3a17, 0 5px 8px rgba(0,0,0,.35);
+    text-shadow: 0 1px 1px rgba(0,0,0,.35);
+    font-weight: 600; letter-spacing: .02em;
+}
+.btn:hover:not(:disabled) { filter: brightness(1.08); color: #fff; border: 0; }
+.btn:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #5e3a17; }
+.game-toolbar .btn { width: 100%; padding: .6rem .8rem; font-size: .95rem; }
+.btn-primary { background: linear-gradient(#f0c35e, #c18a22); color: #3b2414; text-shadow: none; }
+.btn-primary:hover:not(:disabled) { background: linear-gradient(#f5cd72, #cf9a30); color: #3b2414; }
+.btn-danger { background: linear-gradient(#c9533f, #8f2a1b); color: #fff; font-size: .85rem; border: 0; }
+.btn-danger:hover:not(:disabled) { background: linear-gradient(#d9604b, #a03322); color: #fff; }
+.btn-small.active { background: linear-gradient(#f0c35e, #c18a22); color: #3b2414; }
+.btn:disabled { opacity: .45; }
+
+/* panneaux crème */
+.controls-section { gap: .8rem; }
+.control-group {
+    background: linear-gradient(#f6e8cb, #ecd8ae); color: #4a2d12;
+    border: 2px solid #b07a43; border-radius: 12px; padding: .9rem;
+    box-shadow: 0 4px 10px rgba(0,0,0,.35);
+}
+.control-group h3 { color: #7a4a22; border-bottom: 1px solid #c9a56e; padding-bottom: .3rem; letter-spacing: .12em; }
+.control-group .btn { display: block; width: calc(100% - .5rem); }
+.help-text { color: #7a5430; }
+.time-left { color: #2f6b3a; }
+.time-per-move { color: #8a4a12; border-color: #b07a43; }
+.toggle-btn {
+    background: #f6e8cb; color: #6b3f1a; border: 1px solid #b07a43;
+}
+.toggle-btn.active { background: linear-gradient(#b8761f, #8a5420); color: #fff; border-color: #6b3f1a; }
+.option-label { color: #4a2d12; }
+.move-history { background: #fbf2de; color: #4a2d12; border: 1px solid #c9a56e; border-radius: 8px; }
+.piece-btn { background: #f6e8cb; border-color: #b07a43; }
+.piece-btn.active { border-color: #b8681f; background: #ffe7b0; }
+
+/* fenêtres */
+.dialog { background: rgba(30, 15, 5, .75); }
+.dialog-content { background: linear-gradient(#f6e8cb, #ecd8ae); color: #4a2d12; border: 3px solid #8a5628; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.6); }
+.dialog-content h2 { color: #6b3f1a; }
+.dialog-label { color: #4a2d12; }
+.progress-bar { background: #d9bf8d; }
+.progress-bar .progress { background: linear-gradient(#b8761f, #8a5420); }
+.history-list { background: #fbf2de; border-color: #c9a56e; }
+.history-item { color: #4a2d12; }
+.history-item.selected { background: #f0d9a8; }
+.time-dialog-input input { background: #fbf2de; color: #4a2d12; border-color: #b07a43; }
+
+/* panneau 🎨 aux couleurs du thème */
+#custom-btn, #zoom-btn { background: linear-gradient(#cf9457, #9f6633) !important; color: #fff !important; border: 0 !important; border-radius: 20px !important; box-shadow: 0 3px 0 #5e3a17 !important; }
+
+/* tablette / téléphone : tout s'empile, boutons en rangée */
+@media (max-width: 1000px) {
+    .main-content { grid-template-columns: minmax(0, 1fr); padding: .6rem; row-gap: .6rem; }
+    .game-toolbar { grid-column: 1; grid-row: 1; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: .4rem; }
+    .game-toolbar .btn { width: auto; flex: 1 1 auto; padding: .5rem .7rem; }
+    #match-toolbar { grid-column: 1; grid-row: 1; }
+    .board-container { grid-column: 1; grid-row: 2; padding: 8px; }
+    .opening-name { grid-column: 1; grid-row: 3; }
+    .status-text { grid-column: 1; grid-row: 4; }
+    .search-info { grid-column: 1; grid-row: 5; }
+    .controls-section { grid-column: 1; grid-row: 6; width: 100%; }
+}
+html { background: #3b2414; }
+
+/* taille réglable du damier */
+#board { max-width: none !important; }
+.board-container { width: auto !important; max-width: none !important; justify-self: center; }
+.main-content { grid-template-columns: 190px auto 300px; }
+body.focus-board .controls-section { display: none; }
+body.focus-board .main-content { grid-template-columns: 190px auto; }
+@media (max-width: 1000px) {
+    .main-content { grid-template-columns: minmax(0, 1fr) !important; }
+    body.focus-board .controls-section { display: none; }
+}
+@media (max-width: 1000px) { .eval-bar-spacer { display: none; } }

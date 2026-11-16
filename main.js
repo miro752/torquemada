@@ -185,7 +185,7 @@ function wireGameStateEvents() {
         const { move, board, gameOver } = e.detail;
         updateBoardFromState();
         clearInputState(false);
-        boardUI.setLastMove(move.from, move.to);
+        boardUI.setLastMove(move.from, move.to, move.notation);
         updateMoveHistory();
         updateUndoRedoButtons();
         updatePlayButton();
@@ -203,7 +203,7 @@ function wireGameStateEvents() {
         // Restore last move highlight if there's still history
         if (gameState.history.length > 0) {
             const prevMove = gameState.history[gameState.history.length - 1].move;
-            boardUI.setLastMove(prevMove.from, prevMove.to);
+            boardUI.setLastMove(prevMove.from, prevMove.to, prevMove.notation);
         }
         updateMoveHistory();
         updateUndoRedoButtons();
@@ -218,7 +218,7 @@ function wireGameStateEvents() {
         updateBoardFromState();
         clearInputState();
         boardUI.setSelected(null);
-        boardUI.setLastMove(move.from, move.to);
+        boardUI.setLastMove(move.from, move.to, move.notation);
         updateMoveHistory();
         updateUndoRedoButtons();
         updatePlayButton();
@@ -827,8 +827,8 @@ function updateSearchInfo(info) {
     }
     if (pvEl) pvEl.textContent = info.pvStr || '-';
     if (boardUI && showAnalysis && !editMode && info.pvStr) {
-        const mv = /^\s*(\d+)\s*[-x]\s*(\d+)/.exec(info.pvStr);
-        if (mv) boardUI.setArrow(parseInt(mv[1], 10), parseInt(mv[2], 10));
+        const mv = /^\s*(\d+(?:\s*[-x]\s*\d+)+)/.exec(info.pvStr);
+        if (mv) boardUI.setArrow(mv[1].match(/\d+/g).map(Number));
     }
 
     // Root moves display
@@ -1606,18 +1606,7 @@ function setupEventHandlers() {
 // --- Board resize ---
 
 function resizeBoard() {
-    if (window.innerWidth <= 768) return;
-
-    const section = document.querySelector('.board-section');
-    const canvas = document.getElementById('board');
-
-    if (section && canvas && boardUI) {
-        const sectionWidth = section.clientWidth;
-        const size = Math.min(sectionWidth - 16, 480);
-        if (size > 0) {
-            boardUI.resize(size);
-        }
-    }
+    if (boardUI && boardUI.applySize) boardUI.applySize();
 }
 
 // Start application
