@@ -42,6 +42,7 @@
                     <button id="btn-edit" class="btn btn-small">Modifier</button>
                     <button id="btn-play" class="btn btn-small btn-primary" disabled>Jouer !</button>
                     <button id="btn-stats" class="btn btn-small">Parties</button>
+                    <button id="btn-ext" class="btn btn-small">Réflexion</button>
                 </div>
                 <div id="match-toolbar" class="game-toolbar" style="display: none;">
                     <span style="flex:1"></span>
@@ -66,6 +67,20 @@
                     <div class="search-info-row">
                         <span id="search-pv" class="search-pv">-</span>
                     </div>
+                </div>
+
+                <!-- Analyse étendue (tous les coups) -->
+                <div id="ext-panel" class="ext-panel" style="display: none;">
+                    <div class="ext-head">
+                        <b>Analyse étendue</b>
+                        <label>Temps par coup
+                            <select id="ext-time"><option value="1">1 s</option><option value="2" selected>2 s</option><option value="4">4 s</option><option value="8">8 s</option><option value="15">15 s</option></select>
+                        </label>
+                        <button id="ext-stop" class="btn btn-small">Arrêter</button>
+                        <button id="ext-close" class="btn btn-small">Fermer</button>
+                    </div>
+                    <div id="ext-status" class="ext-status"></div>
+                    <div id="ext-rows" class="ext-rows"></div>
                 </div>
             </section>
 

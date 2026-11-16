@@ -1042,3 +1042,29 @@ body.focus-board .main-content { grid-template-columns: 190px auto; }
     body.focus-board .controls-section { display: none; }
 }
 @media (max-width: 1000px) { .eval-bar-spacer { display: none; } }
+
+/* analyse étendue (réflexion) */
+.ext-panel { grid-column: 2; grid-row: 5; background: #f1dfbf; color: #4a2d12; border: 2px solid #b07a43; border-radius: 10px; padding: .6rem .8rem; box-sizing: border-box; width: 100%; }
+.ext-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: .4rem; }
+.ext-head select { background: #fbf2de; color: #4a2d12; border: 1px solid #b07a43; border-radius: 6px; padding: .15rem; }
+.ext-head .btn { padding: .3rem .8rem; }
+.ext-status { font-size: .8rem; color: #8a5a2a; margin-bottom: .3rem; }
+.ext-rows { font-family: monospace; font-size: .8rem; max-height: 260px; overflow: auto; background: #fbf2de; border-radius: 6px; }
+.ext-row { display: grid; grid-template-columns: 4.2em 2.6em 1fr; gap: .4rem; padding: .25rem .4rem; cursor: pointer; border-bottom: 1px solid #e3cfa6; }
+.ext-row:hover { background: #f4e2b8; }
+.ext-row.sel { background: #e8c987; }
+.ext-row .sc { font-weight: 700; }
+.ext-row .sc.pos { color: #1d6b2c; } .ext-row .sc.neg { color: #a3201f; }
+.ext-row .ln { word-break: break-word; color: #3b2414; }
+.ext-row .dp { color: #8a5a2a; }
+@media (max-width: 1000px) { .ext-panel { grid-column: 1; grid-row: 6; } .controls-section { grid-row: 7 !important; } }
+body.match-play #ext-panel { display: none !important; }
+
+/* analyse étendue : sur grand écran elle remplace le panneau de droite, tout reste visible sans défiler */
+@media (min-width: 1001px) {
+    body.ext-open .controls-section { display: none; }
+    body.ext-open .main-content { grid-template-columns: 190px auto minmax(380px, 1fr); }
+    body.ext-open .ext-panel { grid-column: 3; grid-row: 1 / span 5; align-self: start; }
+    body.ext-open .ext-rows { max-height: calc(var(--bs, 560px) - 70px); }
+    body.ext-open .ext-row { grid-template-columns: 4em 2.4em 1fr; }
+}

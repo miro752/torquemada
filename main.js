@@ -733,6 +733,160 @@ async function startNewGame(playAs) {
     updatePlayButton();
 }
 
+// --- Analyse étendue (réflexion sur tous les coups) ---
+
+let extRun = 0;
+let extActive = false;
+let extRows = [];
+let extSel = -1;
+
+function fmtScore(s) {
+    if (Math.abs(s) > 29000) {
+        const m = Math.ceil((30000 - Math.abs(s)) / 2);
+        return s > 0 ? `M${m}` : `-M${m}`;
+    }
+    if (Math.abs(s) <= 10000) return (s >= 0 ? '+' : '') + (s / 100).toFixed(2);
+    const raw = s > 0 ? s - 10000 : s + 10000;
+    return (raw > 0 ? '+' : '') + (raw / 100).toFixed(2);
+}
+
+function extLine(row) {
+    const all = [row.move.notation, ...(row.pv || [])];
+    let out = '', n = 1;
+    all.forEach((m, i) => {
+        if (i % 2 === 0) out += `${i ? ' ' : ''}${n++}.${m}`; else out += ` ${m}`;
+    });
+    return out;
+}
+
+function renderExt() {
+    const box = document.getElementById('ext-rows');
+    if (!box) return;
+    const sorted = extRows.map((r, i) => ({ r, i })).sort((a, b) => b.r.score - a.r.score);
+    box.innerHTML = '';
+    sorted.forEach(({ r, i }) => {
+        const d = document.createElement('div');
+        d.className = 'ext-row' + (i === extSel ? ' sel' : '');
+        const sc = r.done || r.depth ? fmtScore(r.score) : '...';
+        d.innerHTML = `<span class="sc ${r.score > 20 ? 'pos' : r.score < -20 ? 'neg' : ''}">${sc}</span><span class="dp">${r.depth ? '[' + r.depth + ']' : ''}</span><span class="ln"></span>`;
+        d.querySelector('.ln').textContent = extLine(r);
+        d.addEventListener('click', () => {
+            extSel = i;
+            const nums = (r.move.notation.match(/\d+/g) || []).map(Number);
+            if (boardUI && nums.length > 1) boardUI.setArrow(nums);
+            renderExt();
+        });
+        box.appendChild(d);
+    });
+}
+
+function setExtStatus(t) {
+    const el = document.getElementById('ext-status');
+    if (el) el.textContent = t;
+}
+
+function stopExtAnalysis() {
+    if (!extActive) return;
+    extRun++;
+    extActive = false;
+    engine.stopSearch();
+}
+
+async function startExtAnalysis() {
+    if (extActive) { stopExtAnalysis(); return; }
+    if (editMode || gameState.gameOver || !gameState.legalMoves.length) return;
+    if (searchManager.state === 'thinking') { setExtStatus("Attendez la fin du coup de l'ordinateur."); document.getElementById('ext-panel').style.display = 'block'; return; }
+
+    const run = ++extRun;
+    extActive = true;
+    const panel = document.getElementById('ext-panel');
+    panel.style.display = 'block';
+    const board = gameState.board;
+    const moves = gameState.legalMoves.slice();
+    const secs = parseFloat(document.getElementById('ext-time').value) || 2;
+    const wasPonder = turnController.ponderEnabled;
+    const savedAuto = turnController.autoPlay;
+    turnController.autoPlay = false;
+    if (wasPonder) await togglePondering(false);
+    await searchManager.abort();
+    if (boardUI) boardUI.setArrow(null);
+
+    extRows = moves.map(m => ({ move: m, score: -99999, depth: 0, pv: [], done: false }));
+    extSel = -1;
+    renderExt();
+
+    try {
+        for (let k = 0; k < moves.length; k++) {
+            if (run !== extRun || gameState.board !== board) break;
+            setExtStatus(`Coup ${k + 1} / ${moves.length} : ${moves[k].notation} (${secs} s par coup)`);
+            const child = await engine.makeMove(board, moves[k]);
+            const reply = await engine.getLegalMoves(child);
+            const row = extRows[k];
+            if (reply.length === 0) {
+                row.score = 30000; row.depth = 0; row.done = true; renderExt(); continue;
+            }
+            const onProg = (r) => {
+                if (run !== extRun || r.score === undefined) return;
+                row.score = -r.score; row.depth = r.depth; row.pv = r.pv || [];
+                renderExt();
+            };
+            const res = await engine.search(child, secs, secs, onProg, true);
+            if (run !== extRun) break;
+            if (res && !res.error && res.score !== undefined) {
+                row.score = -res.score; row.depth = res.depth; row.pv = res.pv || [];
+            }
+            row.done = true;
+            renderExt();
+        }
+        if (run === extRun) {
+            setExtStatus('Analyse terminée. Cliquez sur une ligne pour voir la flèche.');
+            const best = extRows.reduce((b, r, i) => (b < 0 || r.score > extRows[b].score) ? i : b, -1);
+            if (best >= 0) {
+                extSel = best;
+                const nums = (extRows[best].move.notation.match(/\d+/g) || []).map(Number);
+                if (boardUI && nums.length > 1) boardUI.setArrow(nums);
+                renderExt();
+            }
+        } else {
+            setExtStatus('Analyse arrêtée.');
+        }
+    } catch (err) {
+        console.error('Analyse étendue:', err);
+        setExtStatus('Erreur pendant l\'analyse.');
+    } finally {
+        if (run === extRun) extActive = false;
+        turnController.autoPlay = savedAuto;
+        if (wasPonder && !turnController.ponderEnabled) await togglePondering(true);
+        const b = document.getElementById('btn-ext');
+        if (b) b.textContent = 'Réflexion';
+    }
+}
+
+function setupExtAnalysis() {
+    const btn = document.getElementById('btn-ext');
+    if (btn) btn.addEventListener('click', () => {
+        const panel = document.getElementById('ext-panel');
+        if (extActive) { stopExtAnalysis(); return; }
+        if (panel.style.display !== 'none') { panel.style.display = 'none'; if (boardUI) boardUI.setArrow(null); return; }
+        startExtAnalysis();
+    });
+    const stop = document.getElementById('ext-stop');
+    if (stop) stop.addEventListener('click', () => { if (extActive) stopExtAnalysis(); else startExtAnalysis(); });
+    const close = document.getElementById('ext-close');
+    if (close) close.addEventListener('click', () => {
+        stopExtAnalysis();
+        document.getElementById('ext-panel').style.display = 'none';
+        if (boardUI) boardUI.setArrow(null);
+    });
+    const panelEl = document.getElementById('ext-panel');
+    if (panelEl) new MutationObserver(() => {
+        document.body.classList.toggle('ext-open', panelEl.style.display !== 'none');
+        window.dispatchEvent(new Event('resize'));
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
+    }).observe(panelEl, { attributes: true, attributeFilter: ['style'] });
+    if (gameState) gameState.addEventListener('move', () => { stopExtAnalysis(); const p = document.getElementById('ext-panel'); if (p) p.style.display = 'none'; });
+}
+
 // --- Play button ---
 
 function updatePlayButton() {
@@ -1557,6 +1711,8 @@ function setupEventHandlers() {
     // Match play
     const matchPlayBtn = document.getElementById('btn-match-play');
     if (matchPlayBtn) matchPlayBtn.addEventListener('click', startMatchPlay);
+
+    setupExtAnalysis();
 
     const statsBtn = document.getElementById('btn-stats');
     if (statsBtn) statsBtn.addEventListener('click', showHistoryDialog);
