@@ -36,8 +36,12 @@
                 <!-- Game toolbar -->
                 <div id="game-controls" class="game-toolbar">
                     <button id="btn-new-game" class="btn btn-small">Nouvelle partie</button>
+                    <div class="nav-row"><button id="btn-start" class="btn btn-small btn-arrow" title="Retour au début de la partie" disabled>&#x23EE;</button>
                     <button id="btn-undo" class="btn btn-small btn-arrow" title="Annuler" disabled>&#x25C0;</button>
                     <button id="btn-redo" class="btn btn-small btn-arrow" title="Rétablir" disabled>&#x25B6;</button>
+                    <button id="btn-end" class="btn btn-small btn-arrow" title="Aller à la fin de la partie" disabled>&#x23ED;</button></div>
+                    <div class="auto-row"><button id="btn-auto" class="btn btn-small" title="Regarder la partie automatiquement" disabled>▶ Revoir la partie</button>
+                    <select id="auto-speed" title="Vitesse"><option value="500">Rapide</option><option value="1200" selected>Normal</option><option value="2500">Lent</option></select></div>
                     <button id="btn-flip" class="btn btn-small">Retourner</button>
                     <button id="btn-edit" class="btn btn-small">Modifier</button>
                     <button id="btn-play" class="btn btn-small btn-primary" disabled>Jouer !</button>
@@ -252,7 +256,7 @@
     <!-- Stats & game history dialog -->
     <div id="history-dialog" class="dialog" style="display: none;">
         <div class="dialog-content dialog-wide">
-            <h2>Parties sérieuses</h2>
+            <h2>Parties enregistrées</h2>
             <div class="match-stats">
                 <span class="stat-win">V : <span id="history-stat-w">0</span></span>
                 <span class="stat-draw">N : <span id="history-stat-d">0</span></span>

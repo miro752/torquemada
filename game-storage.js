@@ -19,6 +19,20 @@ export function saveGame(game) {
 }
 
 /**
+ * Insert or update (by id) a game record
+ */
+export function upsertGame(game) {
+    const games = getGames();
+    const i = games.findIndex(g => g.id === game.id);
+    if (i >= 0) games[i] = game; else games.push(game);
+    try {
+        localStorage.setItem(GAMES_KEY, JSON.stringify(games));
+    } catch (e) {
+        console.warn('Could not save game:', e);
+    }
+}
+
+/**
  * Get all saved games, most recent first
  * @returns {Array} Array of game objects
  */
@@ -64,6 +78,7 @@ export function computeStats() {
     const games = getGames();
     let wins = 0, draws = 0, losses = 0;
     for (const g of games) {
+        if (g.free) continue;  // parties libres : pas de statistiques
         if (g.result === 'draw') {
             draws++;
         } else if (g.result === g.playerColor) {

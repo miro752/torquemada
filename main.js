@@ -13,7 +13,7 @@ const { MoveInput } = await import(`./move-input.js${_q}`);
 const { BoardUI } = await import(`./board-ui.js${_q}`);
 const { playMoveSound } = await import(`./sound.js${_q}`);
 const { TablebaseLoader, loadNNModelFile } = await import(`./tablebase-loader.js${_q}`);
-const { saveGame, getGames, deleteGame, clearGames, computeStats } = await import(`./game-storage.js${_q}`);
+const { upsertGame, saveGame, getGames, deleteGame, clearGames, computeStats } = await import(`./game-storage.js${_q}`);
 const { isSoundEnabled, setSoundEnabled } = await import(`./sound.js${_q}`);
 
 // --- Module instances (set during init) ---
@@ -887,6 +887,130 @@ function setupExtAnalysis() {
     if (gameState) gameState.addEventListener('move', () => { stopExtAnalysis(); const p = document.getElementById('ext-panel'); if (p) p.style.display = 'none'; });
 }
 
+// --- Enregistrement automatique des parties ---
+
+let autoSaveId = null;
+let autoSaveOff = false;   // position personnalisée ou partie chargée : pas d'enregistrement
+
+function autoSaveGame(result, reason) {
+    if (matchPlayActive || autoSaveOff || !gameState) return;
+    const moves = gameState.history.map(h => h.notation);
+    if (moves.length < 2) return;
+    if (!autoSaveId) autoSaveId = Date.now();
+    const prev = getGames().find(g => g.id === autoSaveId);
+    upsertGame({
+        id: autoSaveId,
+        date: prev ? prev.date : new Date().toISOString(),
+        moves,
+        result: result || (gameState.gameOver ? gameState.winner : (prev && prev.result) || 'unfinished'),
+        resultReason: reason || (prev && prev.resultReason) || null,
+        playerColor: turnController.humanColor,
+        free: true
+    });
+}
+
+function setupAutoSave() {
+    if (!gameState) return;
+    gameState.addEventListener('newGame', () => { autoSaveId = null; autoSaveOff = false; });
+    gameState.addEventListener('positionChanged', () => { autoSaveId = null; autoSaveOff = true; });
+    gameState.addEventListener('gameLoaded', () => { autoSaveId = null; autoSaveOff = true; });
+    gameState.addEventListener('move', () => autoSaveGame());
+    gameState.addEventListener('gameOver', (e) => autoSaveGame(e.detail.winner, e.detail.reason));
+}
+
+// --- Navigation : début / fin / revoir la partie automatiquement ---
+
+let autoRun = 0;
+let autoPlaying = false;
+
+function updateNavButtons() {
+    if (!gameState) return;
+    const { canUndo, canRedo } = gameState.getUndoRedoState();
+    const busy = searchManager.state === 'thinking';
+    const s = document.getElementById('btn-start'), e = document.getElementById('btn-end'), a = document.getElementById('btn-auto');
+    if (s) s.disabled = !canUndo || busy || autoPlaying;
+    if (e) e.disabled = !canRedo || busy || autoPlaying;
+    if (a) a.disabled = (!canUndo && !canRedo) || (busy && !autoPlaying) || editMode;
+}
+
+async function reviewSession(fn) {
+    const savedAuto = turnController.autoPlay;
+    const wasPonder = turnController.ponderEnabled;
+    turnController.autoPlay = false;
+    if (wasPonder) await togglePondering(false);
+    await searchManager.abort();
+    try { await fn(); } finally {
+        turnController.autoPlay = savedAuto;
+        if (wasPonder && !turnController.ponderEnabled) await togglePondering(true);
+        updateNavButtons();
+    }
+}
+
+function stopAutoReplay() {
+    if (!autoPlaying) return;
+    autoRun++;
+    autoPlaying = false;
+    const a = document.getElementById('btn-auto');
+    if (a) { a.textContent = '▶ Revoir la partie'; a.classList.remove('playing'); }
+    updateNavButtons();
+}
+
+async function goStart() {
+    stopAutoReplay();
+    await reviewSession(async () => { while (gameState.getUndoRedoState().canUndo) await gameState.undo(); });
+}
+
+async function goEnd() {
+    stopAutoReplay();
+    await reviewSession(async () => { while (gameState.getUndoRedoState().canRedo) await gameState.redo(); });
+}
+
+async function toggleAutoReplay() {
+    if (autoPlaying) { stopAutoReplay(); return; }
+    if (editMode) return;
+    const run = ++autoRun;
+    autoPlaying = true;
+    const a = document.getElementById('btn-auto');
+    a.textContent = '⏸ Pause'; a.classList.add('playing');
+    updateNavButtons();
+    const ext = document.getElementById('ext-panel');
+    await reviewSession(async () => {
+        // si on est déjà à la fin, on recommence depuis le début
+        if (!gameState.getUndoRedoState().canRedo) {
+            while (run === autoRun && gameState.getUndoRedoState().canUndo) await gameState.undo();
+            if (run === autoRun) await new Promise(r => setTimeout(r, 600));
+        }
+        while (run === autoRun && gameState.getUndoRedoState().canRedo) {
+            await gameState.redo();
+            const delay = parseInt(document.getElementById('auto-speed').value) || 1200;
+            await new Promise(r => setTimeout(r, delay));
+        }
+    });
+    if (run === autoRun) {
+        autoPlaying = false;
+        a.textContent = '▶ Revoir la partie'; a.classList.remove('playing');
+        updateNavButtons();
+    }
+}
+
+function setupNavButtons() {
+    const s = document.getElementById('btn-start'), e = document.getElementById('btn-end'), a = document.getElementById('btn-auto');
+    if (s) s.addEventListener('click', goStart);
+    if (e) e.addEventListener('click', goEnd);
+    if (a) a.addEventListener('click', toggleAutoReplay);
+    // toute action manuelle arrête la lecture automatique
+    for (const id of ['btn-undo', 'btn-redo', 'btn-new-game', 'btn-edit', 'btn-play']) {
+        const b = document.getElementById(id);
+        if (b) b.addEventListener('click', stopAutoReplay, true);
+    }
+    if (gameState) for (const ev of ['move', 'undo', 'redo', 'newGame', 'positionChanged', 'gameLoaded']) {
+        gameState.addEventListener(ev, updateNavButtons);
+    }
+    searchManager.addEventListener('searchStart', updateNavButtons);
+    searchManager.addEventListener('searchEnd', updateNavButtons);
+    updateNavButtons();
+}
+
 // --- Play button ---
 
 function updatePlayButton() {
@@ -1316,7 +1440,10 @@ function showHistoryDialog() {
             const movesPreview = g.moves.slice(0, 6).join(' ') + (g.moves.length > 6 ? ' ...' : '');
 
             let resultLabel, resultClass;
-            if (g.result === 'draw') {
+            if (g.free) {
+                resultLabel = g.result === 'white' ? '1-0' : g.result === 'black' ? '0-1' : g.result === 'draw' ? '½' : '…';
+                resultClass = 'draw';
+            } else if (g.result === 'draw') {
                 resultLabel = 'N';
                 resultClass = 'draw';
             } else if (g.result === g.playerColor) {
@@ -1713,6 +1840,8 @@ function setupEventHandlers() {
     if (matchPlayBtn) matchPlayBtn.addEventListener('click', startMatchPlay);
 
     setupExtAnalysis();
+    setupAutoSave();
+    setupNavButtons();
 
     const statsBtn = document.getElementById('btn-stats');
     if (statsBtn) statsBtn.addEventListener('click', showHistoryDialog);

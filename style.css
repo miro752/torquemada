@@ -1068,3 +1068,13 @@ body.match-play #ext-panel { display: none !important; }
     body.ext-open .ext-rows { max-height: calc(var(--bs, 560px) - 70px); }
     body.ext-open .ext-row { grid-template-columns: 4em 2.4em 1fr; }
 }
+
+/* navigation dans la partie */
+.auto-row { display: flex; gap: .3rem; align-items: center; }
+.auto-row .btn { flex: 1 1 auto; }
+.auto-row select { background: #fbf2de; color: #4a2d12; border: 1px solid #b07a43; border-radius: 12px; padding: .3rem .2rem; font-size: .8rem; }
+@media (min-width: 1001px) { .game-toolbar .btn-arrow { } }
+.btn-small.playing { background: linear-gradient(#f0c35e, #c18a22) !important; color: #3b2414 !important; }
+
+.nav-row { display: flex; gap: .35rem; }
+.nav-row .btn { flex: 1 1 0; width: auto !important; padding-left: 0 !important; padding-right: 0 !important; }
