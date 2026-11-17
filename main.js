@@ -1104,8 +1104,8 @@ async function learnFromGame() {
             if (loss >= thr && better && better !== played) {
                 const key = memPosKey(boards[k]);
                 const old = mem[key];
-                const bad = old ? Array.from(new Set([...old.bad, played])) : [played];
-                mem[key] = { bad, better, loss: Math.round(loss), date: new Date().toISOString() };
+                const bad = Array.from(new Set([...((old && old.bad) || []), played]));
+                mem[key] = { ...(old || {}), bad, better, loss: Math.round(loss), date: new Date().toISOString() };
                 memSave(mem);
                 found++;
                 const d = document.createElement('div');
@@ -1139,6 +1139,34 @@ function setupLearning() {
     if (btn) btn.addEventListener('click', learnFromGame);
     const stop = document.getElementById('learn-stop');
     if (stop) stop.addEventListener('click', () => { if (learnActive) stopLearn(); else learnFromGame(); });
+    const teach = document.getElementById('learn-teach');
+    if (teach) teach.addEventListener('click', () => {
+        showLearnPanel();
+        const rows = document.getElementById('learn-rows');
+        rows.innerHTML = '';
+        const hist = gameState.history;
+        if (!hist.length) { setLearnStatus("Jouez d'abord la partie (par exemple en mode 2 joueurs), puis cliquez ici."); return; }
+        const side = document.getElementById('teach-side').value;
+        const mem = memLoad();
+        let n = 0;
+        hist.forEach((h, k) => {
+            const isWhite = h.board.whiteToMove;
+            if (side === 'white' && !isWhite) return;
+            if (side === 'black' && isWhite) return;
+            const key = memPosKey(h.board);
+            mem[key] = { ...(mem[key] || {}), play: h.notation, date: new Date().toISOString() };
+            n++;
+            const d = document.createElement('div');
+            d.className = 'ext-row';
+            d.innerHTML = '<span class="sc pos"></span><span class="dp"></span><span class="ln"></span>';
+            d.querySelector('.sc').textContent = isWhite ? 'Blancs' : 'Noirs';
+            d.querySelector('.dp').textContent = '#' + (Math.floor(k / 2) + 1);
+            d.querySelector('.ln').textContent = `Coup retenu : ${h.notation}`;
+            rows.appendChild(d);
+        });
+        memSave(mem);
+        setLearnStatus(`${n} coup(s) retenu(s). Mémoire totale : ${memCount()} position(s). Le moteur les jouera s'il retrouve ces positions.`);
+    });
     const close = document.getElementById('learn-close');
     if (close) close.addEventListener('click', () => { stopLearn(); document.getElementById('learn-panel').style.display = 'none'; });
     const clear = document.getElementById('learn-clear');
@@ -1155,7 +1183,12 @@ function setupLearning() {
         if (!e) return null;
         const cur = gameState.legalMoves.find(m => m.from_xor_to === best.from_xor_to && m.captures === best.captures);
         const notation = cur ? cur.notation : best.notation;
-        if (!e.bad.includes(notation)) return null;
+        if (e.play) {
+            if (notation === e.play) return null;
+            const pm = gameState.legalMoves.find(m => m.notation === e.play);
+            if (pm) return pm;
+        }
+        if (!e.bad || !e.bad.includes(notation)) return null;
         return gameState.legalMoves.find(m => m.notation === e.better) || null;
     };
 }

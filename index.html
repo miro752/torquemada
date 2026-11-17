@@ -84,6 +84,10 @@
                         <label>Sensibilité
                             <select id="learn-thr"><option value="30">Fine (0,30)</option><option value="50" selected>Normale (0,50)</option><option value="100">Grosses erreurs (1,00)</option></select>
                         </label>
+                        <label>Retenir les coups des
+                            <select id="teach-side"><option value="white">Blancs</option><option value="black">Noirs</option><option value="both">Deux camps</option></select>
+                        </label>
+                        <button id="learn-teach" class="btn btn-small" title="Mémorise les coups de cette partie : le moteur les rejouera s'il retrouve les mêmes positions">Retenir ces coups</button>
                         <button id="learn-stop" class="btn btn-small">Arrêter</button>
                         <button id="learn-clear" class="btn btn-small">Effacer la mémoire</button>
                         <button id="learn-close" class="btn btn-small">Fermer</button>
