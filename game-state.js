@@ -179,7 +179,7 @@ export class GameState extends EventTarget {
      * Load a game from move notations. Replays all moves, then rewinds to start.
      * @param {string[]} moves - Array of move notation strings
      */
-    async loadGame(moves) {
+    async loadGame(moves, start = null) {
         // Reset to initial position
         this.history = [];
         this.redoStack = [];
@@ -188,7 +188,11 @@ export class GameState extends EventTarget {
         this.gameOverReason = null;
         this.positionCounts = new Map();
 
-        this.board = await this.engine.getInitialBoard();
+        const makeStart = async () => start
+            ? { white: start.white, black: start.black, kings: start.kings, whiteToMove: start.whiteToMove,
+                pieceCount: popcount(start.white) + popcount(start.black), nReversible: 0 }
+            : await this.engine.getInitialBoard();
+        this.board = await makeStart();
         this._incrementPosition(this.board);
 
         // Replay all moves to build history
@@ -224,7 +228,7 @@ export class GameState extends EventTarget {
         this.history = [];
 
         // Reset to initial position
-        this.board = await this.engine.getInitialBoard();
+        this.board = await makeStart();
         this.positionCounts = new Map();
         this._incrementPosition(this.board);
         await this._updateLegalMoves();

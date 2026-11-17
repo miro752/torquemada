@@ -896,7 +896,8 @@ function setupExtAnalysis() {
 // --- Enregistrement automatique des parties ---
 
 let autoSaveId = null;
-let autoSaveOff = false;   // position personnalisée ou partie chargée : pas d'enregistrement
+let autoSaveOff = false;   // partie chargée pour analyse : pas d'enregistrement
+let autoSaveCustom = false; // partie commencée depuis une position composée
 
 function autoSaveGame(result, reason) {
     if (matchPlayActive || autoSaveOff || !gameState) return;
@@ -904,8 +905,12 @@ function autoSaveGame(result, reason) {
     if (moves.length < 2) return;
     if (!autoSaveId) autoSaveId = Date.now();
     const prev = getGames().find(g => g.id === autoSaveId);
+    const startBoard = gameState.history[0] && gameState.history[0].board;
     upsertGame({
         id: autoSaveId,
+        start: autoSaveCustom && startBoard
+            ? { white: startBoard.white, black: startBoard.black, kings: startBoard.kings, whiteToMove: startBoard.whiteToMove }
+            : undefined,
         date: prev ? prev.date : new Date().toISOString(),
         moves,
         result: result || (gameState.gameOver ? gameState.winner : (prev && prev.result) || 'unfinished'),
@@ -917,9 +922,9 @@ function autoSaveGame(result, reason) {
 
 function setupAutoSave() {
     if (!gameState) return;
-    gameState.addEventListener('newGame', () => { autoSaveId = null; autoSaveOff = false; });
-    gameState.addEventListener('positionChanged', () => { autoSaveId = null; autoSaveOff = true; });
-    gameState.addEventListener('gameLoaded', () => { autoSaveId = null; autoSaveOff = true; });
+    gameState.addEventListener('newGame', () => { autoSaveId = null; autoSaveOff = false; autoSaveCustom = false; });
+    gameState.addEventListener('positionChanged', () => { autoSaveId = null; autoSaveOff = false; autoSaveCustom = true; });
+    gameState.addEventListener('gameLoaded', () => { autoSaveId = null; autoSaveOff = true; autoSaveCustom = false; });
     gameState.addEventListener('move', () => autoSaveGame());
     gameState.addEventListener('gameOver', (e) => autoSaveGame(e.detail.winner, e.detail.reason));
 }
@@ -1690,7 +1695,7 @@ function showHistoryDialog() {
             html += `<div class="history-item" data-id="${g.id}">
                 <span class="history-date">${dateStr} ${timeStr}</span>
                 <span class="history-color ${g.playerColor}"></span>
-                <span class="history-moves">${movesPreview}</span>
+                <span class="history-moves">${movesPreview} <i>(${g.moves.length} coups${g.start ? ', position composée' : ''})</i></span>
                 <span class="history-result ${resultClass}">${resultLabel}</span>
             </div>`;
         }
@@ -1707,6 +1712,8 @@ function hideHistoryDialog() {
 }
 
 function updateHistoryButtons() {
+    const watchBtn = document.getElementById('btn-history-watch');
+    if (watchBtn) watchBtn.disabled = !selectedGameId;
     const analyzeBtn = document.getElementById('btn-history-analyze');
     const deleteBtn = document.getElementById('btn-history-delete');
     if (analyzeBtn) analyzeBtn.disabled = !selectedGameId;
@@ -1742,6 +1749,12 @@ function setupHistoryDialogHandlers() {
         showHistoryDialog();
     });
 
+    document.getElementById('btn-history-watch').addEventListener('click', () => {
+        if (!selectedGameId) return;
+        const game = getGames().find(g => g.id === selectedGameId);
+        if (game) { hideHistoryDialog(); watchGame(game); }
+    });
+
     document.getElementById('btn-history-analyze').addEventListener('click', () => {
         if (!selectedGameId) return;
         const games = getGames();
@@ -1760,7 +1773,7 @@ async function loadGameForAnalysis(game) {
     const savedAutoPlay = turnController.autoPlay;
     turnController.autoPlay = false;
     await searchManager.abort();
-    await gameState.loadGame(game.moves);
+    await gameState.loadGame(game.moves, game.start || null);
     turnController.autoPlay = savedAutoPlay;
 
     boardUI.setFlipped(game.playerColor === 'black');
@@ -1771,6 +1784,28 @@ async function loadGameForAnalysis(game) {
     updateMoveHistory();
     updateUndoRedoButtons();
     updateModeButtons();
+}
+
+async function watchGame(game) {
+    stopExtAnalysis();
+    stopLearn();
+    stopAutoReplay();
+    await togglePondering(false);
+    clearSearchInfo();
+    const savedAutoPlay = turnController.autoPlay;
+    turnController.autoPlay = false;
+    await searchManager.abort();
+    await gameState.loadGame(game.moves, game.start || null);
+    turnController.autoPlay = savedAutoPlay;
+    boardUI.setFlipped(game.playerColor === 'black');
+    turnController.setHumanColor('both');
+    toggleShowAnalysis(false);
+    updateMoveHistory();
+    updateUndoRedoButtons();
+    updateModeButtons();
+    updateNavButtons();
+    await new Promise(r => setTimeout(r, 400));
+    toggleAutoReplay();
 }
 
 async function exitMatchPlay() {
