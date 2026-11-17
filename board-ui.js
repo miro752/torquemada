@@ -469,6 +469,28 @@ export class BoardUI {
             ctx.globalAlpha = prevAlpha;
             return;
         }
+        if (this.pieceStyle === 'anneaux') {
+            const lum = parseInt(base.slice(1, 3), 16) * 0.3 + parseInt(base.slice(3, 5), 16) * 0.59 + parseInt(base.slice(5, 7), 16) * 0.11;
+            const ink = lum > 150 ? '#111111' : '#f2f2f2';
+            const t = radius * 0.14;
+            const disc = (cx, cy, side) => {
+                if (side) {
+                    ctx.fillStyle = base; ctx.strokeStyle = '#111111'; ctx.lineWidth = 2.5;
+                    ctx.beginPath(); ctx.arc(cx, cy + t, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                    ctx.fillStyle = base; ctx.fillRect(cx - radius, cy, radius * 2, t);
+                    ctx.beginPath(); ctx.moveTo(cx - radius, cy); ctx.lineTo(cx - radius, cy + t);
+                    ctx.moveTo(cx + radius, cy); ctx.lineTo(cx + radius, cy + t); ctx.stroke();
+                }
+                ctx.fillStyle = base; ctx.strokeStyle = '#111111'; ctx.lineWidth = 2.5;
+                ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                ctx.strokeStyle = ink; ctx.lineWidth = Math.max(1.2, radius * 0.06);
+                ctx.beginPath(); ctx.arc(cx, cy, radius * 0.76, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath(); ctx.arc(cx, cy, radius * 0.52, 0, Math.PI * 2); ctx.stroke();
+            };
+            if (isKing) { disc(x, y + t * 0.7, true); disc(x, y - t * 1.1, true); } else disc(x, y, false);
+            ctx.globalAlpha = prevAlpha;
+            return;
+        }
         if (this.pieceStyle === 'disc3d') {
             const t = radius * 0.2;       // épaisseur du pion
             const disc = (cx, cy) => {
@@ -681,7 +703,7 @@ export class BoardUI {
         const rows = [['lightSquare', 'Cases claires'], ['darkSquare', 'Cases foncées'], ['whitePiece', 'Pions blancs'], ['blackPiece', 'Pions noirs'], ['kingMark', 'Marque des dames']];
         let html = '<b>Personnaliser</b><div style="height:8px"></div>';
         for (const [k, l] of rows) html += `<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">${l}<input type="color" data-k="${k}" style="margin-left:12px;width:48px;height:28px;padding:0;border:1px solid #888"></label>`;
-        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Style des pions<select data-k="pieceStyle" style="margin-left:12px"><option value="relief">Relief</option><option value="flat">Plat</option><option value="ring">Anneau</option><option value="disc3d">Disque 3D</option><option value="jeton">Jeton</option><option value="bouton">Bouton</option><option value="gemme">Gemme</option><option value="verre">Verre</option></select></label>';
+        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Style des pions<select data-k="pieceStyle" style="margin-left:12px"><option value="relief">Relief</option><option value="flat">Plat</option><option value="ring">Anneau</option><option value="anneaux">Anneaux (photo)</option><option value="disc3d">Disque 3D</option><option value="jeton">Jeton</option><option value="bouton">Bouton</option><option value="gemme">Gemme</option><option value="verre">Verre</option></select></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Numéros des cases (1-32)<input type="checkbox" data-k="showNumbers" style="margin-left:12px;width:20px;height:20px"></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Flèches (dernier coup / meilleur coup)<input type="checkbox" data-k="showArrow" style="margin-left:12px;width:20px;height:20px"></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Taille du damier<input type="range" data-k="boardSize" min="300" max="1000" step="10" style="margin-left:12px;width:120px"></label>';

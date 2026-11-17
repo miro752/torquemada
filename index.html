@@ -36,12 +36,6 @@
                 <!-- Game toolbar -->
                 <div id="game-controls" class="game-toolbar">
                     <button id="btn-new-game" class="btn btn-small">Nouvelle partie</button>
-                    <div class="nav-row"><button id="btn-start" class="btn btn-small btn-arrow" title="Retour au début de la partie" disabled>&#x23EE;</button>
-                    <button id="btn-undo" class="btn btn-small btn-arrow" title="Annuler" disabled>&#x25C0;</button>
-                    <button id="btn-redo" class="btn btn-small btn-arrow" title="Rétablir" disabled>&#x25B6;</button>
-                    <button id="btn-end" class="btn btn-small btn-arrow" title="Aller à la fin de la partie" disabled>&#x23ED;</button></div>
-                    <div class="auto-row"><button id="btn-auto" class="btn btn-small" title="Regarder la partie automatiquement" disabled>▶ Revoir la partie</button>
-                    <select id="auto-speed" title="Vitesse"><option value="500">Rapide</option><option value="1200" selected>Normal</option><option value="2500">Lent</option></select></div>
                     <button id="btn-flip" class="btn btn-small">Retourner</button>
                     <button id="btn-edit" class="btn btn-small">Modifier</button>
                     <button id="btn-play" class="btn btn-small btn-primary" disabled>Jouer !</button>
@@ -60,6 +54,17 @@
                     </div>
                     <canvas id="board" width="480" height="480"></canvas>
                     <div class="eval-bar-spacer"></div>
+                </div>
+                <div id="nav-bar" class="nav-bar">
+                    <button id="btn-start" class="media-btn" title="Début de la partie (Début)" disabled>&#x23EE;</button>
+                    <button id="btn-undo" class="media-btn" title="Coup précédent (←)" disabled>&#x23EA;</button>
+                    <button id="btn-redo" class="media-btn" title="Coup suivant (→)" disabled>&#x23E9;</button>
+                    <button id="btn-end" class="media-btn" title="Fin de la partie (Fin)" disabled>&#x23ED;</button>
+                    <button id="btn-play-replay" class="media-btn" title="Revoir la partie automatiquement (Espace)" disabled>&#x25B6;</button>
+                    <button id="btn-pause-replay" class="media-btn" title="Pause (Espace)" disabled>&#x23F8;</button>
+                    <button id="btn-stop-replay" class="media-btn" title="Arrêter et aller à la fin" disabled>&#x23F9;</button>
+                    <select id="auto-speed" title="Vitesse de lecture"><option value="500">Rapide</option><option value="1200" selected>Normal</option><option value="2500">Lent</option></select>
+                    <button id="btn-auto" style="display:none" disabled></button>
                 </div>
                 <p id="opening-name" class="opening-name"></p>
                 <p id="status" class="status-text">Les blancs jouent</p>

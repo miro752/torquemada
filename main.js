@@ -942,6 +942,12 @@ function updateNavButtons() {
     if (s) s.disabled = !canUndo || busy || autoPlaying;
     if (e) e.disabled = !canRedo || busy || autoPlaying;
     if (a) a.disabled = (!canUndo && !canRedo) || (busy && !autoPlaying) || editMode;
+    const pl = document.getElementById('btn-play-replay'), pa = document.getElementById('btn-pause-replay'), st = document.getElementById('btn-stop-replay');
+    const any = (canUndo || canRedo) && !editMode;
+    if (pl) pl.disabled = !any || autoPlaying || busy;
+    if (pa) pa.disabled = !autoPlaying;
+    if (st) st.disabled = !autoPlaying;
+    if (pl) pl.classList.toggle('on', autoPlaying);
 }
 
 async function reviewSession(fn) {
@@ -1009,6 +1015,10 @@ function setupNavButtons() {
     if (s) s.addEventListener('click', goStart);
     if (e) e.addEventListener('click', goEnd);
     if (a) a.addEventListener('click', toggleAutoReplay);
+    const pl = document.getElementById('btn-play-replay'), pa = document.getElementById('btn-pause-replay'), st = document.getElementById('btn-stop-replay');
+    if (pl) pl.addEventListener('click', () => { if (!autoPlaying) toggleAutoReplay(); });
+    if (pa) pa.addEventListener('click', () => stopAutoReplay());
+    if (st) st.addEventListener('click', () => goEnd());
     // toute action manuelle arrête la lecture automatique
     for (const id of ['btn-undo', 'btn-redo', 'btn-new-game', 'btn-edit', 'btn-play']) {
         const b = document.getElementById(id);
