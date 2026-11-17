@@ -46,7 +46,8 @@
                     <button id="btn-edit" class="btn btn-small">Modifier</button>
                     <button id="btn-play" class="btn btn-small btn-primary" disabled>Jouer !</button>
                     <button id="btn-stats" class="btn btn-small">Parties</button>
-                    <button id="btn-ext" class="btn btn-small">Réflexion</button>
+                    <button id="btn-ext" class="btn btn-small" title="Raccourci : R">Réflexion</button>
+                    <button id="btn-learn" class="btn btn-small" title="Analyse la partie et retient les erreurs du moteur">Apprendre de cette partie</button>
                 </div>
                 <div id="match-toolbar" class="game-toolbar" style="display: none;">
                     <span style="flex:1"></span>
@@ -71,6 +72,24 @@
                     <div class="search-info-row">
                         <span id="search-pv" class="search-pv">-</span>
                     </div>
+                </div>
+
+                <!-- Mémoire des erreurs -->
+                <div id="learn-panel" class="ext-panel" style="display: none;">
+                    <div class="ext-head">
+                        <b>Mémoire des erreurs</b>
+                        <label>Temps par position
+                            <select id="learn-time"><option value="1">1 s</option><option value="2" selected>2 s</option><option value="4">4 s</option></select>
+                        </label>
+                        <label>Sensibilité
+                            <select id="learn-thr"><option value="30">Fine (0,30)</option><option value="50" selected>Normale (0,50)</option><option value="100">Grosses erreurs (1,00)</option></select>
+                        </label>
+                        <button id="learn-stop" class="btn btn-small">Arrêter</button>
+                        <button id="learn-clear" class="btn btn-small">Effacer la mémoire</button>
+                        <button id="learn-close" class="btn btn-small">Fermer</button>
+                    </div>
+                    <div id="learn-status" class="ext-status"></div>
+                    <div id="learn-rows" class="ext-rows"></div>
                 </div>
 
                 <!-- Analyse étendue (tous les coups) -->
@@ -132,9 +151,9 @@
                         <span id="btn-time-per-move" class="time-per-move" title="Cliquez pour changer">+3s/coup</span>
                     </div>
                     <div class="toggle-group">
-                        <button id="btn-engine-white" class="toggle-btn">Moteur blancs</button>
-                        <button id="btn-engine-black" class="toggle-btn active">Moteur noirs</button>
-                        <button id="btn-two-player" class="toggle-btn">2 joueurs</button>
+                        <button id="btn-engine-white" class="toggle-btn" title="Raccourci : B">Moteur blancs (B)</button>
+                        <button id="btn-engine-black" class="toggle-btn active" title="Raccourci : N">Moteur noirs (N)</button>
+                        <button id="btn-two-player" class="toggle-btn" title="Raccourci : J">2 joueurs (J)</button>
                     </div>
                 </div>
 
@@ -143,10 +162,12 @@
                     <h3>Options</h3>
                     <div class="options-list">
                         <label class="option-label"><input type="checkbox" id="chk-ponder"> Réfléchir en continu</label>
+                        <label class="option-label"><input type="checkbox" id="chk-autocapture" checked> Prise obligatoire automatique</label>
                         <label class="option-label"><input type="checkbox" id="chk-show-analysis"> Afficher l'analyse</label>
                         <label class="option-label"><input type="checkbox" id="chk-use-book" checked> Utiliser le livre d'ouvertures</label>
                         <label class="option-label"><input type="checkbox" id="chk-sound" checked> Son</label>
                     </div>
+                    <p class="help-text">Raccourcis clavier : B, N, J (modes) · ← → (coup précédent/suivant) · Début / Fin · Espace (revoir la partie) · R (réflexion)</p>
                 </div>
 
                 <!-- Move history -->

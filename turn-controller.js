@@ -198,6 +198,13 @@ export class TurnController extends EventTarget {
         // Guard against re-entry during the await points below
         this._engineMovePending = true;
         try {
+            // Mémoire des erreurs : remplace un coup déjà reconnu comme mauvais
+            if (this.errorMemoryHook && result.bestMove) {
+                try {
+                    const alt = this.errorMemoryHook(board, result.bestMove);
+                    if (alt) result.bestMove = alt;
+                } catch (e) { console.warn('errorMemoryHook:', e); }
+            }
             // Ensure minimum 200ms so user can see what happened
             const elapsed = Date.now() - searchStart;
             if (elapsed < 200) {

@@ -800,6 +800,7 @@ async function startExtAnalysis() {
     const run = ++extRun;
     extActive = true;
     const panel = document.getElementById('ext-panel');
+    const lp = document.getElementById('learn-panel'); if (lp) lp.style.display = 'none';
     panel.style.display = 'block';
     const board = gameState.board;
     const moves = gameState.legalMoves.slice();
@@ -878,12 +879,17 @@ function setupExtAnalysis() {
         document.getElementById('ext-panel').style.display = 'none';
         if (boardUI) boardUI.setArrow(null);
     });
-    const panelEl = document.getElementById('ext-panel');
-    if (panelEl) new MutationObserver(() => {
-        document.body.classList.toggle('ext-open', panelEl.style.display !== 'none');
+    const panelIds = ['ext-panel', 'learn-panel'];
+    const refreshOpen = () => {
+        const open = panelIds.some(id => { const el = document.getElementById(id); return el && el.style.display !== 'none'; });
+        document.body.classList.toggle('ext-open', open);
         window.dispatchEvent(new Event('resize'));
         setTimeout(() => window.dispatchEvent(new Event('resize')), 150);
-    }).observe(panelEl, { attributes: true, attributeFilter: ['style'] });
+    };
+    panelIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) new MutationObserver(refreshOpen).observe(el, { attributes: true, attributeFilter: ['style'] });
+    });
     if (gameState) gameState.addEventListener('move', () => { stopExtAnalysis(); const p = document.getElementById('ext-panel'); if (p) p.style.display = 'none'; });
 }
 
@@ -1009,6 +1015,200 @@ function setupNavButtons() {
     searchManager.addEventListener('searchStart', updateNavButtons);
     searchManager.addEventListener('searchEnd', updateNavButtons);
     updateNavButtons();
+}
+
+// --- Mémoire des erreurs ---
+
+const MEM_KEY = 'sambrk.errors';
+function memLoad() { try { return JSON.parse(localStorage.getItem(MEM_KEY)) || {}; } catch (e) { return {}; } }
+function memSave(m) { try { localStorage.setItem(MEM_KEY, JSON.stringify(m)); } catch (e) { console.warn(e); } }
+function memPosKey(b) { return `${b.white},${b.black},${b.kings}`; }
+function memCount() { return Object.keys(memLoad()).length; }
+
+let learnRun = 0;
+let learnActive = false;
+
+function setLearnStatus(t) { const el = document.getElementById('learn-status'); if (el) el.textContent = t; }
+function showLearnPanel() {
+    const ep = document.getElementById('ext-panel'); if (ep) ep.style.display = 'none';
+    document.getElementById('learn-panel').style.display = 'block';
+}
+function stopLearn() {
+    if (!learnActive) return;
+    learnRun++;
+    learnActive = false;
+    engine.stopSearch();
+}
+
+async function learnFromGame() {
+    if (learnActive) { stopLearn(); return; }
+    showLearnPanel();
+    const rows = document.getElementById('learn-rows');
+    rows.innerHTML = '';
+    if (editMode) { setLearnStatus('Quittez le mode édition avant.'); return; }
+    const hc = turnController.humanColor;
+    if (hc === 'both') { setLearnStatus('Choisissez « Moteur blancs » (B) ou « Moteur noirs » (N), pour que je sache quels coups du moteur analyser.'); return; }
+    if (searchManager.state === 'thinking') { setLearnStatus("Attendez la fin du coup de l'ordinateur."); return; }
+    const hist = gameState.history.slice();
+    if (hist.length < 4) { setLearnStatus('La partie est trop courte pour apprendre quelque chose.'); return; }
+
+    const engineWhite = hc === 'black';
+    const boards = hist.map(h => h.board);
+    const startBoard = gameState.board;
+    boards.push(startBoard);
+    const run = ++learnRun;
+    learnActive = true;
+    const secs = parseFloat(document.getElementById('learn-time').value) || 2;
+    const thr = parseInt(document.getElementById('learn-thr').value) || 50;
+
+    const savedAuto = turnController.autoPlay;
+    const wasPonder = turnController.ponderEnabled;
+    turnController.autoPlay = false;
+    if (wasPonder) await togglePondering(false);
+    await searchManager.abort();
+
+    const cache = new Map();
+    const alive = () => run === learnRun && gameState.board === startBoard;
+    async function evalPos(i) {
+        if (cache.has(i)) return cache.get(i);
+        const b = boards[i];
+        const legal = await engine.getLegalMoves(b);
+        let r;
+        if (legal.length === 0) r = { score: -30000, bestMove: null, legalCount: 0 };
+        else {
+            const s = await engine.search(b, secs, secs, null, true);
+            r = (s && !s.error && s.score !== undefined) ? { score: s.score, bestMove: s.bestMove, legalCount: legal.length } : null;
+        }
+        cache.set(i, r);
+        return r;
+    }
+
+    const mem = memLoad();
+    let found = 0;
+    const engineIdx = [];
+    for (let k = 0; k < hist.length; k++) if (boards[k].whiteToMove === engineWhite) engineIdx.push(k);
+    try {
+        for (let n = 0; n < engineIdx.length; n++) {
+            if (!alive()) break;
+            const k = engineIdx[n];
+            setLearnStatus(`Analyse du coup ${n + 1} / ${engineIdx.length} du moteur (${secs} s par position) — ${found} erreur(s) trouvée(s)`);
+            const a = await evalPos(k);
+            if (!alive() || !a || a.legalCount < 2 || !a.bestMove) continue;
+            const b = await evalPos(k + 1);
+            if (!alive() || !b) continue;
+            const eBefore = a.score, eAfter = -b.score;
+            if ((eBefore <= -800 && eAfter <= -800) || (eBefore >= 800 && eAfter >= 800)) continue;
+            const loss = eBefore - eAfter;
+            const played = hist[k].notation;
+            const better = a.bestMove.notation;
+            if (loss >= thr && better && better !== played) {
+                const key = memPosKey(boards[k]);
+                const old = mem[key];
+                const bad = old ? Array.from(new Set([...old.bad, played])) : [played];
+                mem[key] = { bad, better, loss: Math.round(loss), date: new Date().toISOString() };
+                memSave(mem);
+                found++;
+                const d = document.createElement('div');
+                d.className = 'ext-row';
+                d.innerHTML = '<span class="sc neg"></span><span class="dp"></span><span class="ln"></span>';
+                d.querySelector('.sc').textContent = loss >= 1500 ? 'perdu' : '-' + (loss / 100).toFixed(2);
+                d.querySelector('.dp').textContent = '#' + (Math.floor(k / 2) + 1);
+                d.querySelector('.ln').textContent = `Coup joué ${played} → mieux : ${better}`;
+                rows.appendChild(d);
+            }
+        }
+        if (alive()) {
+            setLearnStatus(found
+                ? `Terminé : ${found} erreur(s) retenue(s). Mémoire totale : ${memCount()} position(s). Le moteur jouera autrement s'il retrouve ces positions.`
+                : `Terminé : aucune erreur nette trouvée (seuil ${(thr / 100).toFixed(2)}). Mémoire totale : ${memCount()} position(s).`);
+        } else {
+            setLearnStatus(`Analyse arrêtée. ${found} erreur(s) retenue(s). Mémoire totale : ${memCount()} position(s).`);
+        }
+    } catch (err) {
+        console.error('Apprentissage:', err);
+        setLearnStatus("Erreur pendant l'analyse.");
+    } finally {
+        if (run === learnRun) learnActive = false;
+        turnController.autoPlay = savedAuto;
+        if (wasPonder && !turnController.ponderEnabled) await togglePondering(true);
+    }
+}
+
+function setupLearning() {
+    const btn = document.getElementById('btn-learn');
+    if (btn) btn.addEventListener('click', learnFromGame);
+    const stop = document.getElementById('learn-stop');
+    if (stop) stop.addEventListener('click', () => { if (learnActive) stopLearn(); else learnFromGame(); });
+    const close = document.getElementById('learn-close');
+    if (close) close.addEventListener('click', () => { stopLearn(); document.getElementById('learn-panel').style.display = 'none'; });
+    const clear = document.getElementById('learn-clear');
+    if (clear) clear.addEventListener('click', () => {
+        if (confirm(`Effacer les ${memCount()} position(s) mémorisées ?`)) {
+            localStorage.removeItem(MEM_KEY);
+            document.getElementById('learn-rows').innerHTML = '';
+            setLearnStatus('Mémoire effacée.');
+        }
+    });
+    // le moteur évite les coups déjà reconnus comme mauvais
+    turnController.errorMemoryHook = (board, best) => {
+        const e = memLoad()[memPosKey(board)];
+        if (!e) return null;
+        const cur = gameState.legalMoves.find(m => m.from_xor_to === best.from_xor_to && m.captures === best.captures);
+        const notation = cur ? cur.notation : best.notation;
+        if (!e.bad.includes(notation)) return null;
+        return gameState.legalMoves.find(m => m.notation === e.better) || null;
+    };
+}
+
+// --- Prise obligatoire automatique ---
+
+let forcedTimer = null;
+function setupAutoCapture() {
+    const chk = document.getElementById('chk-autocapture');
+    try { const v = localStorage.getItem('sambrk.autoCapture'); if (chk && v !== null) chk.checked = v === '1'; } catch (e) {}
+    if (chk) chk.addEventListener('change', () => { try { localStorage.setItem('sambrk.autoCapture', chk.checked ? '1' : '0'); } catch (e) {} });
+    gameState.addEventListener('move', () => {
+        clearTimeout(forcedTimer);
+        const board = gameState.board;
+        forcedTimer = setTimeout(async () => {
+            if (!chk || !chk.checked) return;
+            if (gameState.board !== board || gameState.gameOver || editMode) return;
+            if (extActive || learnActive || autoPlaying) return;
+            if (searchManager.state === 'thinking' || !turnController.isHumanTurn()) return;
+            const moves = gameState.legalMoves;
+            if (moves.length !== 1 || !String(moves[0].notation).includes('x')) return;
+            await animateAndMakeMove(moves[0], true);
+        }, 500);
+    });
+}
+
+// --- Raccourcis clavier (PC) ---
+
+function setupShortcuts() {
+    const click = (id) => { const b = document.getElementById(id); if (b && !b.disabled) b.click(); };
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey || e.altKey || e.metaKey) return;
+        const t = e.target;
+        if (t && (/^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName) || t.isContentEditable)) return;
+        if (document.querySelector('.dialog')) {
+            for (const d of document.querySelectorAll('.dialog')) if (d.style.display && d.style.display !== 'none') return;
+        }
+        switch (e.key) {
+            case 'b': case 'B': click('btn-engine-white'); break;
+            case 'n': case 'N': click('btn-engine-black'); break;
+            case 'j': case 'J': case '2': click('btn-two-player'); break;
+            case 'r': case 'R': click('btn-ext'); break;
+            case 'ArrowLeft': click('btn-undo'); break;
+            case 'ArrowRight': click('btn-redo'); break;
+            case 'Home': click('btn-start'); break;
+            case 'End': click('btn-end'); break;
+            case ' ':
+                if (t && t.tagName === 'BUTTON') return;
+                click('btn-auto'); break;
+            default: return;
+        }
+        e.preventDefault();
+    });
 }
 
 // --- Play button ---
@@ -1582,7 +1782,7 @@ async function showDownloadDialog(type = 'dtm') {
     if (titleEl) {
         titleEl.textContent = type === 'cwdl'
             ? 'Téléchargement des finales WDL 6-8 pièces'
-            : 'Téléchargement des finales DTM 5 pièces';
+            : 'Téléchargement des finales DTM 5-7 pièces';
     }
 
     let cancelled = false;
@@ -1842,6 +2042,9 @@ function setupEventHandlers() {
     setupExtAnalysis();
     setupAutoSave();
     setupNavButtons();
+    setupLearning();
+    setupAutoCapture();
+    setupShortcuts();
 
     const statsBtn = document.getElementById('btn-stats');
     if (statsBtn) statsBtn.addEventListener('click', showHistoryDialog);
