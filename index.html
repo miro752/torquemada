@@ -286,19 +286,39 @@
     <!-- Stats & game history dialog -->
     <div id="history-dialog" class="dialog" style="display: none;">
         <div class="dialog-content dialog-wide">
-            <h2>Parties enregistrées</h2>
+            <h2>Base de parties</h2>
+            <div class="base-bar">
+                <select id="base-select"></select>
+                <button id="base-new" class="btn btn-small">Nouvelle base</button>
+                <button id="base-rename" class="btn btn-small">Renommer</button>
+                <button id="base-del" class="btn btn-small btn-danger">Supprimer la base</button>
+            </div>
+            <div class="base-bar">
+                <input id="base-search" type="search" placeholder="Rechercher : joueur, événement, coups (ex. 9-13 23-19)">
+                <button id="base-pos" class="btn btn-small" title="Trouve les parties qui passent par la position affichée sur le damier">Chercher la position du damier</button>
+                <button id="base-all" class="btn btn-small">Tout afficher</button>
+            </div>
             <div class="match-stats">
                 <span class="stat-win">V : <span id="history-stat-w">0</span></span>
                 <span class="stat-draw">N : <span id="history-stat-d">0</span></span>
                 <span class="stat-loss">D : <span id="history-stat-l">0</span></span>
             </div>
             <div id="history-list" class="history-list"></div>
+            <div id="base-status" class="base-status"></div>
             <div class="history-buttons">
                 <button id="btn-history-watch" class="btn btn-primary" disabled>▶ Regarder</button>
                 <button id="btn-history-analyze" class="btn btn-primary" disabled>Analyser</button>
+                <button id="btn-history-info" class="btn" disabled>Infos</button>
+                <button id="btn-history-move" class="btn" disabled>Déplacer</button>
                 <button id="btn-history-delete" class="btn btn-danger" disabled>Supprimer</button>
+            </div>
+            <div class="history-buttons">
+                <button id="base-import" class="btn">Importer (PDN / JSON)</button>
+                <button id="base-export-pdn" class="btn">Exporter PDN</button>
+                <button id="base-export-json" class="btn">Sauvegarde JSON</button>
                 <button id="btn-history-close" class="btn">Fermer</button>
             </div>
+            <input id="base-file" type="file" accept=".pdn,.txt,.json,text/plain,application/json" style="display:none">
         </div>
     </div>
 

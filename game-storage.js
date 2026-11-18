@@ -33,6 +33,17 @@ export function upsertGame(game) {
 }
 
 /**
+ * Replace the whole list of games
+ */
+export function setGames(games) {
+    try {
+        localStorage.setItem(GAMES_KEY, JSON.stringify(games));
+    } catch (e) {
+        console.warn('Could not save games:', e);
+    }
+}
+
+/**
  * Get all saved games, most recent first
  * @returns {Array} Array of game objects
  */

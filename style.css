@@ -1104,3 +1104,14 @@ body.match-play .nav-bar { display: none; }
     .ext-panel { grid-row: 7; }
     .controls-section { grid-row: 8 !important; }
 }
+
+/* base de parties */
+.base-bar { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: .35rem 0; }
+.base-bar select, .base-bar input { background: #fbf2de; color: #4a2d12; border: 1px solid #b07a43; border-radius: 8px; padding: .35rem .5rem; font-size: .9rem; }
+.base-bar input { flex: 1 1 220px; min-width: 0; }
+.base-status { font-size: .8rem; color: #8a5a2a; min-height: 1.2em; margin: .3rem 0; }
+.history-buttons { flex-wrap: wrap; }
+#history-list { max-height: 38vh; }
+.history-item { align-items: flex-start; }
+.history-moves { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; word-break: break-word; flex: 1 1 auto; margin: 0 .5rem; }
+.history-date { white-space: nowrap; }
