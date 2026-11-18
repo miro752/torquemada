@@ -13,7 +13,9 @@ const { MoveInput } = await import(`./move-input.js${_q}`);
 const { BoardUI } = await import(`./board-ui.js${_q}`);
 const { playMoveSound } = await import(`./sound.js${_q}`);
 const { TablebaseLoader, loadNNModelFile } = await import(`./tablebase-loader.js${_q}`);
-const { upsertGame, saveGame, getGames, setGames, deleteGame, clearGames, computeStats } = await import(`./game-storage.js${_q}`);
+const { initGameStorage, pushGames, upsertGame, saveGame, getGames, setGames, deleteGame, clearGames, computeStats } = await import(`./game-storage.js${_q}`);
+await initGameStorage();
+const FG = await import(`./fastgame.js${_q}`);
 const { isSoundEnabled, setSoundEnabled } = await import(`./sound.js${_q}`);
 
 // --- Module instances (set during init) ---
@@ -1663,6 +1665,8 @@ let baseQuery = '';
 let baseFilter = null;          // Map id -> numéro du coup où la position apparaît
 let selectedGameId = null;
 let baseBusy = false;
+let shownCount = 200;
+const PAGE = 200;
 
 function getBases() {
     let b = null;
@@ -1677,48 +1681,25 @@ function gameBase(g) { return g.base || DEFAULT_BASE; }
 function setBaseStatus(t) { const el = document.getElementById('base-status'); if (el) el.textContent = t; }
 function bitCount(n) { n = n >>> 0; let c = 0; while (n) { n &= n - 1; c++; } return c; }
 
-function boardKeyHash(b) {
-    const s = `${b.white},${b.black},${b.kings},${b.whiteToMove ? 1 : 0}`;
-    let h = 2166136261;
-    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
-    return h;
+const nMoves = (g) => g.ms ? g.ms.split(' ').length : 0;
+const textCache = new WeakMap();
+function gameText(g) {
+    let t = textCache.get(g);
+    if (t === undefined) { t = `${g.white || ''} ${g.black || ''} ${g.event || ''} ${g.date || ''} ${g.ms || ''}`.toLowerCase(); textCache.set(g, t); }
+    return t;
 }
-
-function startBoardOf(game) {
-    const s = game.start;
-    return { white: s.white, black: s.black, kings: s.kings, whiteToMove: s.whiteToMove, pieceCount: bitCount(s.white) + bitCount(s.black), nReversible: 0 };
-}
-
-// Rejoue une partie avec le moteur : renvoie les empreintes de toutes les positions
-async function replayGame(game) {
-    let board = game.start ? startBoardOf(game) : await engine.getInitialBoard();
-    const keys = [boardKeyHash(board)];
-    const done = [];
-    for (const n of game.moves) {
-        const legal = await engine.getLegalMoves(board);
-        const parsed = await engine.parseMove(board, n);
-        if (!parsed) return { keys, ok: false, moves: done };
-        const mv = legal.find(m => m.from_xor_to === parsed.from_xor_to && m.captures === parsed.captures);
-        if (!mv) return { keys, ok: false, moves: done };
-        done.push(mv.notation);
-        board = await engine.makeMove(board, mv);
-        keys.push(boardKeyHash(board));
-    }
-    return { keys, ok: true, moves: done, board };
-}
+const keyCache = new Map();   // id -> Uint32Array (empreintes de position, en mémoire seulement)
+const yieldUI = () => new Promise(r => setTimeout(r, 0));
 
 function filteredGames() {
     let games = getGames().filter(g => gameBase(g) === currentBase);
     const q = baseQuery.trim().toLowerCase();
     if (q) {
         const toks = q.split(/\s+/);
-        games = games.filter(g => {
-            const text = `${g.white || ''} ${g.black || ''} ${g.event || ''} ${g.date || ''} ${g.moves.join(' ')}`.toLowerCase();
-            return text.includes(q) || toks.every(t => text.includes(t));
-        });
+        games = games.filter(g => { const text = gameText(g); return text.includes(q) || toks.every(t => text.includes(t)); });
     }
     if (baseFilter) games = games.filter(g => baseFilter.has(g.id));
-    return games.sort((a, b) => b.id - a.id);
+    return games.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.id - a.id));
 }
 
 function renderBase() {
@@ -1749,14 +1730,16 @@ function renderBase() {
         d.textContent = baseFilter || baseQuery ? 'Aucune partie ne correspond.' : 'Aucune partie dans cette base.';
         listEl.appendChild(d);
     }
-    for (const g of games) {
+    const total = games.length;
+    for (const g of games.slice(0, shownCount)) {
         const d = new Date(g.date);
         const dateStr = isNaN(d) ? (g.date || '') : d.toLocaleDateString('fr', { day: 'numeric', month: 'short', year: '2-digit' });
         const row = document.createElement('div');
         row.className = 'history-item' + (g.id === selectedGameId ? ' selected' : '');
         row.dataset.id = g.id;
         const names = (g.white || g.black) ? `${g.white || '?'} – ${g.black || '?'}` : '';
-        const preview = g.moves.slice(0, 6).join(' ') + (g.moves.length > 6 ? ' ...' : '');
+        const mvl = g.ms ? g.ms.split(' ') : [];
+        const preview = mvl.slice(0, 6).join(' ') + (mvl.length > 6 ? ' ...' : '');
         let label, cls = 'draw';
         if (g.free || g.imported) label = g.result === 'white' ? '1-0' : g.result === 'black' ? '0-1' : g.result === 'draw' ? '½' : '…';
         else if (g.result === 'draw') label = 'N';
@@ -1765,10 +1748,19 @@ function renderBase() {
         row.innerHTML = '<span class="history-date"></span><span class="history-moves"></span><span class="history-result"></span>';
         row.querySelector('.history-date').textContent = dateStr;
         const mv = row.querySelector('.history-moves');
-        mv.textContent = `${names ? names + ' · ' : ''}${g.event ? g.event + ' · ' : ''}${preview} (${g.moves.length} coups${g.start ? ', position composée' : ''}${ply != null ? ', position au coup ' + ply : ''})`;
+        mv.textContent = `${names ? names + ' · ' : ''}${g.event ? g.event + ' · ' : ''}${preview} (${mvl.length} coups${g.start ? ', position composée' : ''}${ply != null ? ', position au coup ' + ply : ''})`;
         const r = row.querySelector('.history-result');
         r.textContent = label; r.classList.add(cls);
         listEl.appendChild(row);
+    }
+    if (total > shownCount) {
+        const more = document.createElement('button');
+        more.className = 'history-more';
+        more.textContent = `Afficher ${Math.min(PAGE, total - shownCount)} de plus (${shownCount} / ${total})`;
+        more.addEventListener('click', () => { shownCount += PAGE; renderBase(); });
+        listEl.appendChild(more);
+    } else if (total > PAGE) {
+        const e = document.createElement('div'); e.className = 'history-empty'; e.textContent = `${total} parties affichées.`; listEl.appendChild(e);
     }
     updateHistoryButtons();
 }
@@ -1779,6 +1771,7 @@ function showHistoryDialog() {
     selectedGameId = null;
     baseFilter = null;
     baseQuery = '';
+    shownCount = PAGE;
     document.getElementById('base-search').value = '';
     setBaseStatus('');
     renderBase();
@@ -1871,7 +1864,7 @@ async function importFile(file) {
         if (t.startsWith('[') && /^\[\s*[{\]]/.test(t) || t.startsWith('{')) {
             let data = JSON.parse(t);
             if (!Array.isArray(data)) data = data.games || [];
-            incoming = data.filter(g => g && Array.isArray(g.moves)).map(g => ({ ...g, keys: undefined }));
+            incoming = data.filter(g => g && (Array.isArray(g.moves) || typeof g.ms === 'string')).map(g => ({ ...g, json: true }));
         } else {
             for (const p of parsePDN(text)) {
                 const res = p.tags.Result || '';
@@ -1883,22 +1876,31 @@ async function importFile(file) {
                 });
             }
         }
-        let n = 0;
+        let n = 0, buf = [];
+        const t0 = Date.now(), baseId = Date.now() * 1000;
+        const dedupe = new Set();
+        for (const g of existing) if (gameBase(g) === currentBase && g.imported) dedupe.add(g.ms);
+        let dup = 0;
         for (const g of incoming) {
             n++;
-            setBaseStatus(`Import : partie ${n} / ${incoming.length}…`);
-            if (n % 5 === 0) await new Promise(r => setTimeout(r, 0));
-            const r = await replayGame(g);
-            if (!r.ok || r.moves.length < 1) { failed++; continue; }
-            existing.push({
-                id: Date.now() + added, date: g.date ? new Date(g.date).toISOString() : new Date().toISOString(),
-                moves: r.moves, result: g.result || 'unfinished', playerColor: 'white', free: true, imported: true,
-                white: g.white, black: g.black, event: g.event, start: g.start, keys: r.keys, base: currentBase
-            });
-            added++;
+            if (n % 500 === 0) { setBaseStatus(`Import : partie ${n} / ${incoming.length}…`); await yieldUI(); }
+            const mv = Array.isArray(g.moves) ? g.moves : (typeof g.ms === 'string' && g.ms ? g.ms.split(' ') : []);
+            const startPos = g.start ? FG.startPosOf(g) : null;
+            const r = mv.length ? FG.replayMoves(startPos, mv) : { ok: false };
+            if (!r.ok) { failed++; continue; }
+            const ms = mv.join(' ');
+            if (dedupe.has(ms) && !g.start) { dup++; continue; }
+            dedupe.add(ms);
+            const rec = {
+                id: baseId + added, date: g.date ? new Date(g.date).toISOString() : new Date().toISOString(),
+                ms, result: g.result || 'unfinished', playerColor: 'white', free: true, imported: true,
+                white: g.white, black: g.black, event: g.event, start: g.start, base: g.base && g.json ? g.base : currentBase
+            };
+            buf.push(rec); added++;
         }
-        setGames(existing);
-        setBaseStatus(`${added} partie(s) importée(s) dans « ${currentBase} »${failed ? `, ${failed} ignorée(s) (coups illisibles)` : ''}.`);
+        setBaseStatus('Enregistrement dans la base…');
+        await pushGames(buf);
+        setBaseStatus(`${added} partie(s) importée(s) dans « ${currentBase} »${failed ? `, ${failed} ignorée(s) (coups illisibles)` : ''}${dup ? `, ${dup} doublon(s) écarté(s)` : ''}.`);
     } catch (err) {
         console.error(err);
         setBaseStatus("Impossible de lire ce fichier. Formats acceptés : PDN (.pdn, .txt) ou sauvegarde SAM_brk (.json).");
@@ -1912,23 +1914,17 @@ async function searchPosition() {
     if (baseBusy) return;
     baseBusy = true; updateHistoryButtons();
     try {
-        const target = boardKeyHash(gameState.board);
-        const all = getGames();
-        const inBase = all.filter(g => gameBase(g) === currentBase);
-        let i = 0, dirty = false;
+        const target = FG.hashPos(FG.posFromBoard(gameState.board));
+        const inBase = getGames().filter(g => gameBase(g) === currentBase);
+        baseFilter = new Map();
+        let i = 0;
         for (const g of inBase) {
             i++;
-            if (!g.keys) {
-                setBaseStatus(`Indexation des parties : ${i} / ${inBase.length}…`);
-                const r = await replayGame(g);
-                g.keys = r.ok ? r.keys : [];
-                dirty = true;
-                if (i % 5 === 0) await new Promise(r2 => setTimeout(r2, 0));
-            }
+            if (i % 1000 === 0) { setBaseStatus(`Recherche de la position : ${i} / ${inBase.length}…`); await yieldUI(); }
+            let k = keyCache.get(g.id);
+            if (!k) { k = FG.replayMoves(FG.startPosOf(g), g.ms ? g.ms.split(' ') : []).keys; keyCache.set(g.id, k); }
+            const p = k.indexOf(target); if (p >= 0) baseFilter.set(g.id, p);
         }
-        if (dirty) setGames(all);
-        baseFilter = new Map();
-        for (const g of inBase) { const p = g.keys.indexOf(target); if (p >= 0) baseFilter.set(g.id, p); }
         setBaseStatus(baseFilter.size
             ? `${baseFilter.size} partie(s) contiennent la position actuelle du damier. Cliquez sur une partie, puis « Analyser » pour l'ouvrir à cet endroit.`
             : 'Aucune partie de cette base ne contient la position actuelle du damier.');
@@ -1976,7 +1972,8 @@ function setupHistoryDialogHandlers() {
         saveBases(getBases().filter(b => b !== currentBase));
         currentBase = DEFAULT_BASE; baseFilter = null; selectedGameId = null; renderBase();
     });
-    document.getElementById('base-search').addEventListener('input', (e) => { baseQuery = e.target.value; renderBase(); });
+    let _dbt = null;
+    document.getElementById('base-search').addEventListener('input', (e) => { baseQuery = e.target.value; shownCount = PAGE; clearTimeout(_dbt); _dbt = setTimeout(renderBase, 300); });
     document.getElementById('base-pos').addEventListener('click', searchPosition);
     document.getElementById('base-all').addEventListener('click', () => { baseFilter = null; baseQuery = ''; document.getElementById('base-search').value = ''; setBaseStatus(''); renderBase(); });
     document.getElementById('base-import').addEventListener('click', () => document.getElementById('base-file').click());
@@ -1988,7 +1985,7 @@ function setupHistoryDialogHandlers() {
         setBaseStatus(`${games.length} partie(s) exportée(s) au format PDN.`);
     });
     document.getElementById('base-export-json').addEventListener('click', () => {
-        const games = getGames().map(g => { const c = { ...g }; delete c.keys; return c; });
+        const games = getGames().map(g => ({ ...g }));
         download('sambrk-sauvegarde.json', JSON.stringify({ bases: getBases(), games }, null, 1), 'application/json');
         setBaseStatus(`Sauvegarde complète : ${games.length} partie(s), toutes bases.`);
     });
