@@ -1827,7 +1827,17 @@ function toPDN(g) {
 }
 function parsePDN(text) {
     const games = [];
-    const chunks = text.replace(/\r/g, '').split(/\n\s*\n(?=\s*\[)/);
+    const chunks = [];
+    {
+        let cur = [], hasMoves = false;
+        for (const line of text.replace(/\r/g, '').replace(/^\uFEFF/, '').split('\n')) {
+            const isTag = /^\s*\[\w+\s+"/.test(line);
+            if (isTag && hasMoves) { chunks.push(cur.join('\n')); cur = []; hasMoves = false; }
+            cur.push(line);
+            if (!isTag && /\d+\s*[-x:]\s*\d+/.test(line)) hasMoves = true;
+        }
+        if (cur.length) chunks.push(cur.join('\n'));
+    }
     for (const ch of chunks) {
         const tags = {};
         ch.replace(/\[(\w+)\s+"([^"]*)"\]/g, (_, k, v) => { tags[k] = v; return ''; });
@@ -1903,7 +1913,7 @@ async function importFile(file) {
         setBaseStatus(`${added} partie(s) importée(s) dans « ${currentBase} »${failed ? `, ${failed} ignorée(s) (coups illisibles)` : ''}${dup ? `, ${dup} doublon(s) écarté(s)` : ''}.`);
     } catch (err) {
         console.error(err);
-        setBaseStatus("Impossible de lire ce fichier. Formats acceptés : PDN (.pdn, .txt) ou sauvegarde SAM_brk (.json).");
+        setBaseStatus("Impossible de lire ce fichier (" + (err && err.message || err) + "). Formats acceptés : PDN (.pdn, .txt) ou sauvegarde SAM_brk (.json).");
     } finally {
         baseBusy = false;
         renderBase();
