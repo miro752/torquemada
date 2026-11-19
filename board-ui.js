@@ -665,7 +665,7 @@ export class BoardUI {
                 if (typeof o.showNumbers === 'boolean') this.showNumbers = o.showNumbers;
                 if (typeof o.showArrow === 'boolean') this.showArrow = o.showArrow;
                 if (typeof o.boardSize === 'number' && o.boardSize >= 260 && o.boardSize <= 1400) this.boardSize = o.boardSize;
-                if (typeof o.focusMode === 'boolean') this.focusMode = o.focusMode;
+                if (typeof o.focusMode === 'boolean') this.focusMode = o.focusMode && window.innerWidth > 1000;
             }
         } catch (e) {}
         this._deriveStrokes();
