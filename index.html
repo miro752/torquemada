@@ -225,6 +225,12 @@
     <div id="new-game-dialog" class="dialog" style="display: none;">
         <div class="dialog-content dialog-narrow">
             <h2>Nouvelle partie</h2>
+            <p class="dialog-label">Ouverture :</p>
+            <select id="new-opening" class="dialog-select">
+                <option value="0">Ouverture normale</option>
+                <option value="2">Au hasard : 2 coups</option>
+                <option value="3">Au hasard : 3 coups</option>
+            </select>
             <p class="dialog-label">Jouer avec :</p>
             <div class="dialog-buttons">
                 <button id="btn-play-white" class="btn">Blancs</button>
@@ -331,6 +337,10 @@
                 <button id="base-new" class="btn btn-small">Nouvelle base</button>
                 <button id="base-rename" class="btn btn-small">Renommer</button>
                 <button id="base-del" class="btn btn-small btn-danger">Supprimer la base</button>
+            </div>
+            <div class="base-bar">
+                <input id="base-player" type="search" list="base-players" placeholder="Nom du joueur (blancs ou noirs)" autocomplete="off">
+                <datalist id="base-players"></datalist>
             </div>
             <div class="base-bar">
                 <input id="base-search" type="search" placeholder="Rechercher : joueur, événement, coups (ex. 9-13 23-19)">

@@ -1156,3 +1156,5 @@ body.lang-ar .loading-content { direction: rtl; }
     #history-list { max-height: 26vh; }
     .history-buttons .btn { padding: .45rem .7rem; }
 }
+.dialog-select { width: 100%; padding: 8px; border: 1px solid #b07a43; border-radius: 8px; background: #fbf2de; color: #4a2d12; font-size: 1rem; margin-bottom: 8px; }
+#base-player { flex: 1 1 100%; }

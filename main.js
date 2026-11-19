@@ -701,6 +701,7 @@ function updateTimePerMoveLabel(seconds) {
 
 function showNewGameDialog() {
     const dialog = document.getElementById('new-game-dialog');
+    try { const s = document.getElementById('new-opening'); if (s) s.value = localStorage.getItem('sambrk.opening') || '0'; } catch (e) {}
     if (dialog) dialog.style.display = 'flex';
 }
 
@@ -709,11 +710,24 @@ function hideNewGameDialog() {
     if (dialog) dialog.style.display = 'none';
 }
 
+async function playRandomOpening(plies) {
+    for (let i = 0; i < plies && !gameState.gameOver; i++) {
+        const moves = gameState.legalMoves;
+        if (!moves || !moves.length) break;
+        await gameState.makeMove(moves[Math.floor(Math.random() * moves.length)]);
+    }
+}
+
 async function startNewGame(playAs) {
     hideNewGameDialog();
     clearSearchInfo();
+    const sel = document.getElementById('new-opening');
+    const plies = sel ? parseInt(sel.value, 10) || 0 : 0;
+    try { localStorage.setItem('sambrk.opening', String(plies)); } catch (e) {}
 
     await searchManager.abort();
+    const wasAuto = turnController.autoPlay, wasPonder = turnController.ponderEnabled;
+    if (plies) { turnController.autoPlay = false; turnController.ponderEnabled = false; }
     await gameState.newGame();
 
     if (playAs === 'white') {
@@ -727,10 +741,17 @@ async function startNewGame(playAs) {
         turnController.setHumanColor('both');
     }
 
+    if (plies) {
+        await playRandomOpening(plies);
+        if (gameClock) gameClock.reset();
+        turnController.autoPlay = wasAuto; turnController.ponderEnabled = wasPonder;
+    }
+
     updateModeButtons();
     updateUndoRedoButtons();
     updateMoveHistory();
     updatePlayButton();
+    if (plies) { try { await turnController._evaluateTurn(); } catch (e) { console.warn(e); } }
 }
 
 // --- Analyse étendue (réflexion sur tous les coups) ---
@@ -1826,6 +1847,7 @@ const BASES_KEY = 'sambrk.bases';
 const DEFAULT_BASE = 'Mes parties';
 let currentBase = DEFAULT_BASE;
 let baseQuery = '';
+let basePlayer = '';
 let baseFilter = null;          // Map id -> numéro du coup où la position apparaît
 let selectedGameId = null;
 let baseBusy = false;
@@ -1852,6 +1874,25 @@ function gameText(g) {
     if (t === undefined) { t = `${g.white || ''} ${g.black || ''} ${g.event || ''} ${g.date || ''} ${g.ms || ''}`.toLowerCase(); textCache.set(g, t); }
     return t;
 }
+const normTxt = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const playerCache = new WeakMap();
+function playerText(g) {
+    let t = playerCache.get(g);
+    if (t === undefined) { t = normTxt(`${g.white || ''} ${g.black || ''}`); playerCache.set(g, t); }
+    return t;
+}
+function refreshPlayerList() {
+    const dl = document.getElementById('base-players');
+    if (!dl) return;
+    const cnt = new Map();
+    for (const g of getGames()) {
+        if (gameBase(g) !== currentBase) continue;
+        for (const n of [g.white, g.black]) { const k = (n || '').trim(); if (k) cnt.set(k, (cnt.get(k) || 0) + 1); }
+    }
+    const top = [...cnt.entries()].sort((a, b) => b[1] - a[1]).slice(0, 300);
+    dl.innerHTML = '';
+    for (const [n] of top) { const o = document.createElement('option'); o.value = n; dl.appendChild(o); }
+}
 const keyCache = new Map();   // id -> Uint32Array (empreintes de position, en mémoire seulement)
 const yieldUI = () => new Promise(r => setTimeout(r, 0));
 
@@ -1862,6 +1903,8 @@ function filteredGames() {
         const toks = q.split(/\s+/);
         games = games.filter(g => { const text = gameText(g); return text.includes(q) || toks.every(t => text.includes(t)); });
     }
+    const pq = normTxt(basePlayer).trim();
+    if (pq) { const pt = pq.split(/\s+/); games = games.filter(g => { const t = playerText(g); return pt.every(x => t.includes(x)); }); }
     if (baseFilter) games = games.filter(g => baseFilter.has(g.id));
     return games.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.id - a.id));
 }
@@ -1891,7 +1934,7 @@ function renderBase() {
     if (!games.length) {
         const d = document.createElement('div');
         d.className = 'history-empty';
-        d.textContent = baseFilter || baseQuery ? 'Aucune partie ne correspond.' : 'Aucune partie dans cette base.';
+        d.textContent = baseFilter || baseQuery || basePlayer ? 'Aucune partie ne correspond.' : 'Aucune partie dans cette base.';
         listEl.appendChild(d);
     }
     const total = games.length;
@@ -1935,8 +1978,11 @@ function showHistoryDialog() {
     selectedGameId = null;
     baseFilter = null;
     baseQuery = '';
+    basePlayer = '';
     shownCount = PAGE;
     document.getElementById('base-search').value = '';
+    const bpl = document.getElementById('base-player'); if (bpl) bpl.value = '';
+    refreshPlayerList();
     setBaseStatus('');
     renderBase();
     dialog.style.display = 'flex';
@@ -2074,6 +2120,7 @@ async function importFile(file) {
         }
         setBaseStatus('Enregistrement dans la base…');
         await pushGames(buf);
+        refreshPlayerList();
         setBaseStatus(`${added} partie(s) importée(s) dans « ${currentBase} »${failed ? `, ${failed} ignorée(s) (coups illisibles)` : ''}${dup ? `, ${dup} doublon(s) écarté(s)` : ''}.`);
     } catch (err) {
         console.error(err);
@@ -2121,7 +2168,7 @@ function setupHistoryDialogHandlers() {
     document.getElementById('btn-history-close').addEventListener('click', hideHistoryDialog);
     dialog.addEventListener('click', (e) => { if (e.target === dialog) hideHistoryDialog(); });
 
-    document.getElementById('base-select').addEventListener('change', (e) => { currentBase = e.target.value; baseFilter = null; selectedGameId = null; setBaseStatus(''); renderBase(); });
+    document.getElementById('base-select').addEventListener('change', (e) => { currentBase = e.target.value; baseFilter = null; selectedGameId = null; refreshPlayerList(); setBaseStatus(''); renderBase(); });
     document.getElementById('base-new').addEventListener('click', () => {
         const n = (prompt('Nom de la nouvelle base :') || '').trim();
         if (!n) return;
@@ -2147,9 +2194,10 @@ function setupHistoryDialogHandlers() {
         currentBase = DEFAULT_BASE; baseFilter = null; selectedGameId = null; renderBase();
     });
     let _dbt = null;
+    document.getElementById('base-player').addEventListener('input', (e) => { basePlayer = e.target.value; shownCount = PAGE; clearTimeout(_dbt); _dbt = setTimeout(renderBase, 300); });
     document.getElementById('base-search').addEventListener('input', (e) => { baseQuery = e.target.value; shownCount = PAGE; clearTimeout(_dbt); _dbt = setTimeout(renderBase, 300); });
     document.getElementById('base-pos').addEventListener('click', searchPosition);
-    document.getElementById('base-all').addEventListener('click', () => { baseFilter = null; baseQuery = ''; document.getElementById('base-search').value = ''; setBaseStatus(''); renderBase(); });
+    document.getElementById('base-all').addEventListener('click', () => { baseFilter = null; baseQuery = ''; basePlayer = ''; document.getElementById('base-player').value = ''; document.getElementById('base-search').value = ''; setBaseStatus(''); renderBase(); });
     document.getElementById('base-import').addEventListener('click', () => document.getElementById('base-file').click());
     document.getElementById('base-file').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) await importFile(f); });
     document.getElementById('base-export-pdn').addEventListener('click', () => {

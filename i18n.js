@@ -155,6 +155,11 @@ const D = [
 ['Style photo', 'Photo style', 'Estilo foto', 'نمط الصورة'],
 ['Couleurs par défaut', 'Default colours', 'Colores por defecto', 'الألوان الافتراضية'],
 ['Nouvelle partie', 'New game', 'Nueva partida', 'لعبة جديدة'],
+['Ouverture :', 'Opening:', 'Apertura:', 'الافتتاح:'],
+['Ouverture normale', 'Normal opening', 'Apertura normal', 'افتتاح عادي'],
+['Au hasard : 2 coups', 'Random: 2 moves', 'Al azar: 2 jugadas', 'عشوائي: حركتان'],
+['Au hasard : 3 coups', 'Random: 3 moves', 'Al azar: 3 jugadas', 'عشوائي: 3 حركات'],
+['Nom du joueur (blancs ou noirs)', 'Player name (white or black)', 'Nombre del jugador (blancas o negras)', 'اسم اللاعب (أبيض أو أسود)'],
 ['Détails du coup', 'Move details', 'Detalles de la jugada', 'تفاصيل الحركة'],
 ];
 
