@@ -1158,3 +1158,19 @@ body.lang-ar .loading-content { direction: rtl; }
 }
 .dialog-select { width: 100%; padding: 8px; border: 1px solid #b07a43; border-radius: 8px; background: #fbf2de; color: #4a2d12; font-size: 1rem; margin-bottom: 8px; }
 #base-player { flex: 1 1 100%; }
+
+/* ===== Identité SAM_brk : bandeau, emblème, écran de démarrage ===== */
+.emblem { width: 46px; height: 46px; flex: none; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+.emblem-big { width: 96px; height: 96px; margin-bottom: 8px; animation: emb 2.4s ease-in-out infinite; }
+@keyframes emb { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+.app-header { display: flex; align-items: center; gap: 14px; padding: 6px 16px; background: linear-gradient(#2a1608, #3b2414); border-bottom: 3px solid #d18a1f; box-shadow: 0 3px 10px rgba(0,0,0,.5); }
+.app-logo { display: flex; align-items: center; gap: 10px; background: none; border: 0; cursor: pointer; padding: 0; }
+.wordmark { font-family: Georgia, 'Times New Roman', serif; font-size: 1.7rem; font-weight: 700; letter-spacing: .06em; background: linear-gradient(#ffe9a8, #e0a030); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
+.wm-u { color: #f0b25a; -webkit-text-fill-color: #f0b25a; }
+.app-tag { color: #d9bf8d; font-size: .85rem; letter-spacing: .04em; }
+.tagline { color: #d9bf8d; margin-bottom: 1.2rem; letter-spacing: .12em; }
+.loading-content h1 { font-family: Georgia, 'Times New Roman', serif; font-size: 2.4rem; background: linear-gradient(#ffe9a8, #e0a030); -webkit-background-clip: text; background-clip: text; color: transparent !important; margin-bottom: .3rem !important; }
+.about { text-align: center; }
+.about .emblem-big { margin: 0 auto 4px; display: block; }
+@media (max-width: 600px) { .app-tag { display: none; } .app-header { padding: 4px 10px; } .emblem { width: 34px; height: 34px; } .wordmark { font-size: 1.4rem; } }
+body.focus-board .app-header, body.match-play .app-tag { }

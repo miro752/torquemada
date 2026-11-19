@@ -4,7 +4,7 @@
  */
 
 // Base URL for tablebase files (configure as needed)
-const TABLEBASE_BASE_URL = 'https://alonamaloh.github.io/torquemada/tablebases/';
+const TABLEBASE_BASE_URL = './tablebases/';
 
 // List of DTM tablebase files (up to 5 pieces)
 const DTM_FILES = [

@@ -2598,6 +2598,7 @@ function setupEventHandlers() {
     setupAutoCapture();
     setupShortcuts();
     setupClockAndLang();
+    { const lg = document.getElementById('app-logo'), ab = document.getElementById('about-dialog'); if (lg && ab) { lg.addEventListener('click', () => { ab.style.display = 'flex'; }); document.getElementById('btn-about-close').addEventListener('click', () => { ab.style.display = 'none'; }); ab.addEventListener('click', (e) => { if (e.target === ab) ab.style.display = 'none'; }); } }
 
     const statsBtn = document.getElementById('btn-stats');
     if (statsBtn) statsBtn.addEventListener('click', showHistoryDialog);

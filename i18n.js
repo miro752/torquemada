@@ -160,6 +160,12 @@ const D = [
 ['Au hasard : 2 coups', 'Random: 2 moves', 'Al azar: 2 jugadas', 'عشوائي: حركتان'],
 ['Au hasard : 3 coups', 'Random: 3 moves', 'Al azar: 3 jugadas', 'عشوائي: 3 حركات'],
 ['Nom du joueur (blancs ou noirs)', 'Player name (white or black)', 'Nombre del jugador (blancas o negras)', 'اسم اللاعب (أبيض أو أسود)'],
+['À propos de SAM_brk', 'About SAM_brk', 'Acerca de SAM_brk', 'حول SAM_brk'],
+['Jeu de dames · analyse · base de parties', 'Draughts · analysis · game database', 'Damas · análisis · base de partidas', 'لعبة الداما · تحليل · قاعدة مباريات'],
+['Dames · Damas · Checkers', 'Dames · Damas · Checkers', 'Dames · Damas · Checkers', 'Dames · Damas · Checkers'],
+['Votre atelier personnel de jeu de dames.', 'Your personal draughts workshop.', 'Su taller personal de damas.', 'ورشتك الشخصية للعبة الداما.'],
+["Parties et base de données jusqu'à 40 000 parties, recherche par joueur, par coups ou par position, horloges, mémoire des erreurs, analyse étendue, quatre langues, fonctionne hors connexion.", 'Games and a database of up to 40,000 games, search by player, moves or position, clocks, error memory, extended analysis, four languages, works offline.', 'Partidas y base de datos de hasta 40 000 partidas, búsqueda por jugador, jugadas o posición, relojes, memoria de errores, análisis ampliado, cuatro idiomas, funciona sin conexión.', 'مباريات وقاعدة بيانات حتى 40 000 مباراة، بحث باللاعب أو الحركات أو الوضعية، ساعات، ذاكرة الأخطاء، تحليل موسّع، أربع لغات، يعمل دون اتصال.'],
+["Le moteur de calcul et les finales viennent du projet libre Torquemada. L'interface, les parties, les horloges et l'apprentissage sont propres à SAM_brk.", 'The calculation engine and endgames come from the open-source Torquemada project. The interface, games, clocks and learning are specific to SAM_brk.', 'El motor de cálculo y los finales proceden del proyecto libre Torquemada. La interfaz, las partidas, los relojes y el aprendizaje son propios de SAM_brk.', 'محرك الحساب والنهايات من مشروع Torquemada الحر. الواجهة والمباريات والساعات والتعلّم خاصة بـ SAM_brk.'],
 ['Détails du coup', 'Move details', 'Detalles de la jugada', 'تفاصيل الحركة'],
 ];
 

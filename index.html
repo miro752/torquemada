@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="favicon.ico">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#0f1430">
+    <meta name="theme-color" content="#3b2414">
     <link rel="apple-touch-icon" href="icon-192.png">
     <!-- Prevent caching -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -21,7 +21,9 @@
     <!-- Loading screen -->
     <div id="loading" class="loading-container">
         <div class="loading-content">
+            <svg class="emblem emblem-big" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="emg" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#6b3f1a"/><stop offset="1" stop-color="#2a1608"/></radialGradient><linearGradient id="emc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#d18a1f"/></linearGradient></defs><circle cx="32" cy="32" r="29" fill="url(#emg)" stroke="url(#emc)" stroke-width="3"/><circle cx="32" cy="32" r="21" fill="none" stroke="#f0b25a" stroke-opacity=".55" stroke-width="1.5"/><path d="M16 40 L19 25 L26 33 L32 21 L38 33 L45 25 L48 40 Z" fill="url(#emc)" stroke="#8a5420" stroke-width="1.2" stroke-linejoin="round"/><rect x="16" y="41" width="32" height="5" rx="2" fill="url(#emc)" stroke="#8a5420" stroke-width="1.2"/></svg>
             <h1>SAM_brk</h1>
+            <p class="tagline">Dames · Damas · Checkers</p>
             <div class="spinner"></div>
             <p id="loading-status">Chargement...</p>
         </div>
@@ -29,6 +31,10 @@
 
     <!-- Main game container -->
     <div id="game-container" class="game-container" style="display: none;">
+        <header id="app-header" class="app-header">
+            <button id="app-logo" class="app-logo" type="button" title="À propos de SAM_brk"><svg class="emblem" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="emg" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#6b3f1a"/><stop offset="1" stop-color="#2a1608"/></radialGradient><linearGradient id="emc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#d18a1f"/></linearGradient></defs><circle cx="32" cy="32" r="29" fill="url(#emg)" stroke="url(#emc)" stroke-width="3"/><circle cx="32" cy="32" r="21" fill="none" stroke="#f0b25a" stroke-opacity=".55" stroke-width="1.5"/><path d="M16 40 L19 25 L26 33 L32 21 L38 33 L45 25 L48 40 Z" fill="url(#emc)" stroke="#8a5420" stroke-width="1.2" stroke-linejoin="round"/><rect x="16" y="41" width="32" height="5" rx="2" fill="url(#emc)" stroke="#8a5420" stroke-width="1.2"/></svg><span class="wordmark">SAM<span class="wm-u">_</span>brk</span></button>
+            <span class="app-tag">Jeu de dames · analyse · base de parties</span>
+        </header>
         <!-- Main content -->
         <main class="main-content">
             <!-- Board section -->
@@ -256,6 +262,19 @@
                 <button id="btn-time-ok" class="btn btn-primary">OK</button>
                 <button id="btn-time-cancel" class="btn">Annuler</button>
             </div>
+        </div>
+    </div>
+
+    <!-- À propos -->
+    <div id="about-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content dialog-narrow about">
+            <svg class="emblem emblem-big" viewBox="0 0 64 64" aria-hidden="true"><defs><radialGradient id="emg" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#6b3f1a"/><stop offset="1" stop-color="#2a1608"/></radialGradient><linearGradient id="emc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#d18a1f"/></linearGradient></defs><circle cx="32" cy="32" r="29" fill="url(#emg)" stroke="url(#emc)" stroke-width="3"/><circle cx="32" cy="32" r="21" fill="none" stroke="#f0b25a" stroke-opacity=".55" stroke-width="1.5"/><path d="M16 40 L19 25 L26 33 L32 21 L38 33 L45 25 L48 40 Z" fill="url(#emc)" stroke="#8a5420" stroke-width="1.2" stroke-linejoin="round"/><rect x="16" y="41" width="32" height="5" rx="2" fill="url(#emc)" stroke="#8a5420" stroke-width="1.2"/></svg>
+            <h2>SAM_brk</h2>
+            <p class="dialog-label">Votre atelier personnel de jeu de dames.</p>
+            <p class="help-text">Parties et base de données jusqu'à 40 000 parties, recherche par joueur, par coups ou par position, horloges, mémoire des erreurs, analyse étendue, quatre langues, fonctionne hors connexion.</p>
+            <p class="help-text">Le moteur de calcul et les finales viennent du projet libre Torquemada. L'interface, les parties, les horloges et l'apprentissage sont propres à SAM_brk.</p>
+            <p class="help-text">Version <span class="no-tr">26</span></p>
+            <div class="dialog-buttons"><button id="btn-about-close" class="btn btn-primary">OK</button></div>
         </div>
     </div>
 
