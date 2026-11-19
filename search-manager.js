@@ -19,6 +19,7 @@ export class SearchManager extends EventTarget {
         // Time management
         this.secondsLeft = 0;
         this.secondsPerMove = 3.0;
+        this.timeProvider = null;       // (board) => {soft, hard} en secondes, ou null
         this._countdownTimer = null;
     }
 
@@ -41,9 +42,17 @@ export class SearchManager extends EventTarget {
         this.dispatchEvent(new CustomEvent('searchStart', { detail: { type: 'think' } }));
 
         // Time control
-        this.secondsLeft += this.secondsPerMove;
-        const softTime = this.secondsLeft / 8;
-        const hardTime = this.secondsLeft;
+        let softTime, hardTime, custom = null;
+        try { custom = this.timeProvider ? this.timeProvider(board) : null; } catch (e) { console.warn('timeProvider:', e); }
+        if (custom) {
+            softTime = Math.max(0.05, custom.soft);
+            hardTime = Math.max(softTime, custom.hard);
+            this.secondsLeft = hardTime;
+        } else {
+            this.secondsLeft += this.secondsPerMove;
+            softTime = this.secondsLeft / 8;
+            hardTime = this.secondsLeft;
+        }
         console.log('Starting search: softTime=', softTime.toFixed(2), 'hardTime=', hardTime.toFixed(2));
         const startTime = Date.now();
         const startSecondsLeft = this.secondsLeft;
@@ -73,8 +82,11 @@ export class SearchManager extends EventTarget {
 
         // Debit elapsed time
         const elapsedSeconds = (Date.now() - startTime) / 1000;
-        this.secondsLeft -= elapsedSeconds;
-        if (this.secondsLeft < 0.1) this.secondsLeft = 0.1;
+        if (custom) this.secondsLeft = 0;
+        else {
+            this.secondsLeft -= elapsedSeconds;
+            if (this.secondsLeft < 0.1) this.secondsLeft = 0.1;
+        }
         this.dispatchEvent(new CustomEvent('timeUpdate', { detail: { secondsLeft: this.secondsLeft } }));
 
         // Check if this result is stale

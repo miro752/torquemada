@@ -164,12 +164,22 @@
                         <button id="btn-engine-black" class="toggle-btn active" title="Raccourci : N">Moteur noirs (N)</button>
                         <button id="btn-two-player" class="toggle-btn" title="Raccourci : J">2 joueurs (J)</button>
                     </div>
+                    <div id="clock-box" class="clock-box">
+                        <div id="clock-row-black" class="clock-row"><span class="clock-label">Noirs</span><span id="clock-b" class="clock-time">--:--</span></div>
+                        <div id="clock-row-white" class="clock-row"><span class="clock-label">Blancs</span><span id="clock-w" class="clock-time">--:--</span></div>
+                        <div id="clock-mode-label" class="clock-mode-label no-tr"></div>
+                        <div class="clock-buttons">
+                            <button id="btn-clock-set" class="btn btn-small">⏱ Temps de la partie</button>
+                            <button id="btn-clock-pause" class="btn btn-small" disabled>Pause</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Options -->
                 <div class="control-group">
                     <h3>Options</h3>
                     <div class="options-list">
+                        <label class="option-label">Langue : <select id="lang-select"><option value="fr">Français</option><option value="en">English</option><option value="es">Español</option><option value="ar">العربية</option></select></label>
                         <label class="option-label"><input type="checkbox" id="chk-ponder"> Réfléchir en continu</label>
                         <label class="option-label"><input type="checkbox" id="chk-autocapture" checked> Prise obligatoire automatique</label>
                         <label class="option-label"><input type="checkbox" id="chk-show-analysis"> Afficher l'analyse</label>
@@ -239,6 +249,35 @@
             <div class="time-dialog-buttons">
                 <button id="btn-time-ok" class="btn btn-primary">OK</button>
                 <button id="btn-time-cancel" class="btn">Annuler</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clock dialog -->
+    <div id="clock-dialog" class="dialog" style="display: none;">
+        <div class="dialog-content dialog-narrow">
+            <h2>Temps de la partie</h2>
+            <div class="clock-modes">
+                <label><input type="radio" name="clock-mode" value="normal"> Normal (temps total)</label>
+                <label><input type="radio" name="clock-mode" value="tourn"> Tournoi</label>
+                <label><input type="radio" name="clock-mode" value="fixed"> Temps fixe par coup</label>
+                <label><input type="radio" name="clock-mode" value="inf"> Infini</label>
+            </div>
+            <div class="clock-fields">
+                <label data-for="normal tourn fixed">Minutes <input id="ck-min" type="number" min="0" max="600" step="1"></label>
+                <label data-for="fixed">Secondes <input id="ck-sec" type="number" min="0" max="59" step="1"></label>
+                <label data-for="normal">Ajout par coup (secondes) <input id="ck-inc" type="number" min="0" max="60" step="1"></label>
+                <label data-for="tourn">Coups par période <input id="ck-n" type="number" min="1" max="200" step="1"></label>
+                <label data-for="inf">Secondes ajoutées par coup (moteur) <input id="ck-pm" type="number" min="0.1" max="600" step="0.1"></label>
+            </div>
+            <p class="help-text" data-for="normal">Chaque joueur dispose de ce temps pour toute la partie (plus l'ajout après chaque coup). Le drapeau tombe à zéro : la partie est perdue au temps.</p>
+            <p class="help-text" data-for="tourn">Ce temps est donné pour le nombre de coups choisi ; il est ajouté de nouveau à chaque période.</p>
+            <p class="help-text" data-for="fixed">Le moteur joue chaque coup en ce temps exact. Pas de limite pour vous.</p>
+            <p class="help-text" data-for="inf">Pas d'horloge. Le moteur ajoute quelques secondes à chaque coup (réglage « +s/coup »).</p>
+            <p class="help-text" data-for="normal tourn">Les horloges démarrent au premier coup joué.</p>
+            <div class="dialog-buttons">
+                <button id="btn-clock-ok" class="btn btn-primary">OK</button>
+                <button id="btn-clock-cancel" class="btn">Annuler</button>
             </div>
         </div>
     </div>

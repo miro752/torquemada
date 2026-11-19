@@ -1115,3 +1115,34 @@ body.match-play .nav-bar { display: none; }
 .history-item { align-items: flex-start; }
 .history-moves { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; word-break: break-word; flex: 1 1 auto; margin: 0 .5rem; }
 .history-date { white-space: nowrap; }
+
+/* ===== Horloges ===== */
+.clock-box { margin-top: .6rem; }
+.clock-row { display: flex; justify-content: space-between; align-items: center; margin: 4px 0; padding: 4px 10px; border-radius: 10px; border: 2px solid #b07a43; background: #fbf2de; color: #4a2d12; }
+.clock-row.running { background: #f6d58a; border-color: #8a5420; box-shadow: 0 0 0 2px rgba(138, 84, 32, .35); }
+.clock-label { font-weight: 600; }
+.clock-time { font-family: "Courier New", monospace; font-size: 1.5rem; font-weight: 700; letter-spacing: 1px; }
+.clock-time.low { color: #b3261e; }
+.clock-mode-label { font-size: .8rem; color: #6b3f1a; margin: 4px 0; text-align: center; }
+.clock-buttons { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+body.clock-hide-bank .input-group { display: none; }
+.clock-modes { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.clock-modes label { display: flex; align-items: center; gap: 8px; font-size: 1rem; color: #4a2d12; }
+.clock-fields { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.clock-fields label { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: #4a2d12; }
+.clock-fields input { width: 90px; padding: 6px; border: 1px solid #b07a43; border-radius: 8px; background: #fbf2de; color: #4a2d12; font-size: 1rem; }
+#clock-dialog .help-text { color: #6b3f1a; }
+
+/* ===== Boutons flottants (Couleurs / Agrandir) : jamais au-dessus d'une fenêtre ===== */
+body.dialog-open #custom-btn, body.dialog-open #zoom-btn { display: none !important; }
+@media (max-width: 800px) {
+    #custom-btn, #zoom-btn { font-size: 12px !important; padding: 5px 9px !important; bottom: 6px !important; opacity: .9; }
+    #custom-btn { right: 6px !important; }
+    #zoom-btn { right: auto !important; left: 6px !important; }
+}
+
+/* ===== Arabe : texte de droite à gauche (le damier reste inchangé) ===== */
+body.lang-ar .controls-section, body.lang-ar .dialog-content, body.lang-ar .status-text, body.lang-ar .ext-panel { direction: rtl; }
+body.lang-ar .move-history, body.lang-ar .clock-time, body.lang-ar #history-list, body.lang-ar .time-left { direction: ltr; }
+body.lang-ar .loading-content { direction: rtl; }
+.history-more { display: block; width: 100%; margin: 8px 0; padding: 8px; border-radius: 10px; border: 1px solid #b07a43; background: #f0d9a8; color: #4a2d12; font-size: 1rem; cursor: pointer; }

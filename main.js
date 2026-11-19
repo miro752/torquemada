@@ -16,6 +16,8 @@ const { TablebaseLoader, loadNNModelFile } = await import(`./tablebase-loader.js
 const { initGameStorage, pushGames, upsertGame, saveGame, getGames, setGames, deleteGame, clearGames, computeStats } = await import(`./game-storage.js${_q}`);
 await initGameStorage();
 const FG = await import(`./fastgame.js${_q}`);
+const I18N = await import(`./i18n.js${_q}`);
+const { GameClock, fmtClock } = await import(`./clock.js${_q}`);
 const { isSoundEnabled, setSoundEnabled } = await import(`./sound.js${_q}`);
 
 // --- Module instances (set during init) ---
@@ -67,7 +69,8 @@ async function init() {
 
     try {
         // Initialize engine
-        updateLoadingStatus('Iniciando motor...');
+        try { I18N.initI18n(); } catch (e) { console.warn('i18n:', e); }
+        updateLoadingStatus('Démarrage du jeu...');
         engine = getEngine();
         await engine.init();
 
@@ -690,13 +693,8 @@ function applyTimePerMove() {
 function updateTimePerMoveLabel(seconds) {
     const el = document.getElementById('btn-time-per-move');
     if (!el) return;
-    let text;
-    if (seconds >= 1 && seconds === Math.floor(seconds)) {
-        text = `+${seconds}s/coup`;
-    } else {
-        text = `+${parseFloat(seconds.toFixed(1))}s/coup`;
-    }
-    el.textContent = text;
+    const s = (seconds >= 1 && seconds === Math.floor(seconds)) ? String(seconds) : String(parseFloat(seconds.toFixed(1)));
+    el.textContent = I18N.t('clock.pm', { s });
 }
 
 // --- New game dialog ---
@@ -1581,6 +1579,172 @@ async function togglePondering(enabled) {
     savePreferences();
 }
 
+
+// --- Langues + horloges de la partie ---
+
+const CLOCK_KEY = 'sambrk.clock';
+let gameClock = null;
+
+function loadClockCfg() {
+    try { const c = JSON.parse(localStorage.getItem(CLOCK_KEY)); if (c && c.mode) return c; } catch (e) {}
+    return null;
+}
+
+function updateClockUI() {
+    if (!gameClock) return;
+    const c = gameClock.cfg, act = gameClock.active;
+    const w = document.getElementById('clock-w'), b = document.getElementById('clock-b');
+    if (w) w.textContent = act ? fmtClock(gameClock.remainingMs('white')) : '--:--';
+    if (b) b.textContent = act ? fmtClock(gameClock.remainingMs('black')) : '--:--';
+    for (const [side, id, tid] of [['white', 'clock-row-white', 'clock-w'], ['black', 'clock-row-black', 'clock-b']]) {
+        const row = document.getElementById(id), tel = document.getElementById(tid);
+        if (row) row.classList.toggle('running', gameClock.running === side);
+        if (tel) tel.classList.toggle('low', act && gameClock.remainingMs(side) < 30000);
+    }
+    const pb = document.getElementById('btn-clock-pause');
+    if (pb) {
+        pb.disabled = !act || (!gameClock.running && !gameClock.paused);
+        const want = gameClock.paused ? 'Reprendre' : 'Pause';
+        if (pb.dataset.want !== want || !pb.textContent.trim()) { pb.dataset.want = want; pb.textContent = want; }
+    }
+}
+
+function clockModeLabel() {
+    const c = gameClock.cfg, T = I18N.t;
+    if (c.mode === 'fixed') return T('clock.fixed', { t: `${Math.floor(((c.min || 0) * 60 + (c.sec || 0)) / 60)}:${String(((c.min || 0) * 60 + (c.sec || 0)) % 60).padStart(2, '0')}` });
+    if (c.mode === 'normal') return T('clock.normal', { m: c.min, i: c.inc || 0 });
+    if (c.mode === 'tourn') return T('clock.tourn', { m: c.min, n: c.n });
+    return T('clock.inf');
+}
+
+function applyClockCfg(cfg, save = true) {
+    gameClock.setConfig(cfg);
+    const c = gameClock.cfg;
+    if (save) { try { localStorage.setItem(CLOCK_KEY, JSON.stringify(c)); } catch (e) {} }
+    if (c.mode === 'inf' && c.pm >= 0.1) {
+        searchManager.setSecondsPerMove(c.pm);
+        updateTimePerMoveLabel(c.pm);
+    }
+    searchManager.resetTimeBank();
+    document.body.classList.toggle('clock-hide-bank', c.mode !== 'inf');
+    const lab = document.getElementById('clock-mode-label');
+    if (lab) lab.textContent = clockModeLabel();
+    updateClockUI();
+}
+
+function setupClockAndLang() {
+    gameClock = new GameClock();
+    window.gameClock = () => gameClock;
+
+    // Temps accordé au moteur selon le mode
+    searchManager.timeProvider = (board) => {
+        const c = gameClock.cfg;
+        const side = board.whiteToMove ? 'white' : 'black';
+        if (c.mode === 'fixed') {
+            const T = Math.max(0.1, (c.min || 0) * 60 + (c.sec || 0));
+            return { soft: T, hard: T };
+        }
+        if (c.mode === 'normal' || c.mode === 'tourn') {
+            const R = Math.max(0.3, gameClock.remainingMs(side) / 1000);
+            const inc = c.mode === 'normal' ? (c.inc || 0) : 0;
+            const soft = Math.min(R / gameClock.movesToGo(side) * 0.9 + inc * 0.8, R * 0.5);
+            const hard = Math.max(0.1, Math.min(soft * 3, R - 0.25));
+            return { soft: Math.min(soft, hard), hard };
+        }
+        return null;
+    };
+
+    gameClock.addEventListener('tick', updateClockUI);
+    gameClock.addEventListener('flag', (e) => {
+        const loser = e.detail.side;
+        const winner = loser === 'white' ? 'black' : 'white';
+        try { searchManager.abort(); } catch (err) {}
+        if (!gameState.gameOver) gameState.setGameOver(winner, 'temps écoulé');
+        updateClockUI();
+    });
+
+    gameState.addEventListener('move', (e) => {
+        const { board, gameOver } = e.detail;
+        const mover = board.whiteToMove ? 'black' : 'white';
+        gameClock.moveMade(mover);
+        if (gameOver) gameClock.stop();
+        else gameClock.start(board.whiteToMove ? 'white' : 'black');
+    });
+    gameState.addEventListener('gameOver', () => gameClock.stop());
+    for (const ev of ['undo', 'redo', 'positionChanged']) gameState.addEventListener(ev, () => gameClock.stop());
+    for (const ev of ['newGame', 'gameLoaded']) gameState.addEventListener(ev, () => gameClock.reset());
+
+    // Dialogue de réglage
+    const dlg = document.getElementById('clock-dialog');
+    const $ = (id) => document.getElementById(id);
+    const modeOf = () => (dlg.querySelector('input[name="clock-mode"]:checked') || {}).value || 'inf';
+    const syncFields = () => {
+        const mode = modeOf();
+        dlg.querySelectorAll('[data-for]').forEach(el => { el.style.display = el.dataset.for.split(' ').includes(mode) ? '' : 'none'; });
+    };
+    dlg.querySelectorAll('input[name="clock-mode"]').forEach(r => r.addEventListener('change', syncFields));
+    $('btn-clock-set').addEventListener('click', () => {
+        const c = gameClock.cfg;
+        dlg.querySelectorAll('input[name="clock-mode"]').forEach(r => { r.checked = r.value === c.mode; });
+        $('ck-min').value = c.min; $('ck-sec').value = c.sec; $('ck-inc').value = c.inc; $('ck-n').value = c.n;
+        $('ck-pm').value = searchManager.secondsPerMove;
+        syncFields();
+        dlg.style.display = 'flex';
+    });
+    $('btn-clock-cancel').addEventListener('click', () => { dlg.style.display = 'none'; });
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.style.display = 'none'; });
+    $('btn-clock-ok').addEventListener('click', () => {
+        const num = (id, d, lo, hi) => { let v = parseFloat($(id).value); if (isNaN(v)) v = d; return Math.min(hi, Math.max(lo, v)); };
+        const mode = modeOf();
+        const cfg = {
+            mode,
+            min: num('ck-min', 5, 0, 600),
+            sec: num('ck-sec', 0, 0, 59),
+            inc: num('ck-inc', 0, 0, 60),
+            n: Math.round(num('ck-n', 30, 1, 200)),
+            pm: num('ck-pm', 3, 0.1, 600)
+        };
+        if ((mode === 'normal' || mode === 'tourn') && cfg.min < 1) cfg.min = 1;
+        if (mode === 'fixed' && cfg.min * 60 + cfg.sec < 0.1) cfg.sec = 1;
+        dlg.style.display = 'none';
+        applyClockCfg(cfg);
+    });
+    $('btn-clock-pause').addEventListener('click', () => {
+        if (gameClock.paused) gameClock.resume(); else gameClock.pause();
+        updateClockUI();
+    });
+
+    // Réglage mémorisé
+    const saved = loadClockCfg();
+    applyClockCfg(saved || gameClock.cfg, false);
+
+    // Langue
+    const sel = $('lang-select');
+    if (sel) {
+        sel.value = I18N.getLang();
+        sel.addEventListener('change', () => I18N.setLang(sel.value));
+    }
+    I18N.onLang((l) => {
+        if (sel) sel.value = l;
+        const lab = document.getElementById('clock-mode-label');
+        if (lab) lab.textContent = clockModeLabel();
+        const pb = document.getElementById('btn-clock-pause');
+        if (pb) { pb.dataset.want = ''; }
+        updateClockUI();
+        const tp = document.getElementById('btn-time-per-move');
+        if (tp) updateTimePerMoveLabel(searchManager.secondsPerMove);
+    });
+
+    // Masque les boutons flottants (Couleurs / Agrandir) quand une fenêtre est ouverte
+    const refreshDialogOpen = () => {
+        const open = [...document.querySelectorAll('.dialog')].some(d => d.style.display === 'flex');
+        document.body.classList.toggle('dialog-open', open);
+    };
+    const mo = new MutationObserver(refreshDialogOpen);
+    document.querySelectorAll('.dialog').forEach(d => mo.observe(d, { attributes: true, attributeFilter: ['style'] }));
+    refreshDialogOpen();
+}
+
 // --- Match Play ---
 
 function getLegacyStats() {
@@ -2385,6 +2549,7 @@ function setupEventHandlers() {
     setupLearning();
     setupAutoCapture();
     setupShortcuts();
+    setupClockAndLang();
 
     const statsBtn = document.getElementById('btn-stats');
     if (statsBtn) statsBtn.addEventListener('click', showHistoryDialog);
