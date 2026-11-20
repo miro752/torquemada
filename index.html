@@ -49,6 +49,8 @@
                     <button id="btn-stats" class="btn btn-small">Parties</button>
                     <button id="btn-ext" class="btn btn-small" title="Raccourci : R">Réflexion</button>
                     <button id="btn-learn" class="btn btn-small" title="Analyse la partie et retient les erreurs du moteur">Apprendre de cette partie</button>
+                    <button id="btn-save-game" class="btn btn-small" title="Enregistrer cette partie dans la base" disabled>💾 Enregistrer</button>
+                    <button id="btn-rec" class="btn btn-small" title="Filmer la partie en vidéo (à lancer et arrêter quand vous voulez)">🎥 Filmer</button>
                 </div>
                 <div id="match-toolbar" class="game-toolbar" style="display: none;">
                     <span style="flex:1"></span>
@@ -192,6 +194,11 @@
                         <label class="option-label"><input type="checkbox" id="chk-show-analysis"> Afficher l'analyse</label>
                         <label class="option-label"><input type="checkbox" id="chk-use-book" checked> Utiliser le livre d'ouvertures</label>
                         <label class="option-label"><input type="checkbox" id="chk-sound" checked> Son</label>
+                        <label class="option-label"><input type="checkbox" id="chk-autosave"> Enregistrer automatiquement les parties</label>
+                        <label class="option-label">Blancs : <input type="text" id="inp-white-name" class="name-input" maxlength="40" placeholder="Nom (facultatif)"></label>
+                        <label class="option-label">Noirs : <input type="text" id="inp-black-name" class="name-input" maxlength="40" placeholder="Nom (facultatif)"></label>
+                        <label class="option-label"><input type="checkbox" id="chk-rec-cam"> Vidéo : ajouter la caméra</label>
+                        <label class="option-label"><input type="checkbox" id="chk-rec-mic"> Vidéo : ajouter le micro</label>
                     </div>
                     <p class="help-text">Raccourcis clavier : B, N, J (modes) · ← → (coup précédent/suivant) · Début / Fin · Espace (revoir la partie) · R (réflexion)</p>
                 </div>

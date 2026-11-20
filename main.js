@@ -920,13 +920,24 @@ let autoSaveId = null;
 let autoSaveOff = false;   // partie chargée pour analyse : pas d'enregistrement
 let autoSaveCustom = false; // partie commencée depuis une position composée
 
-function autoSaveGame(result, reason) {
+let autoSaveEnabled = false;   // choix de l'utilisateur : pas d'enregistrement automatique par défaut
+let savedPly = -1;             // nombre de coups au dernier enregistrement
+
+function getPlayerNames() {
+    const w = (document.getElementById('inp-white-name') || {}).value || '';
+    const b = (document.getElementById('inp-black-name') || {}).value || '';
+    return { white: w.trim(), black: b.trim() };
+}
+
+function autoSaveGame(result, reason, force) {
+    if (!force && !autoSaveEnabled) return;
     if (matchPlayActive || autoSaveOff || !gameState) return;
     const moves = gameState.history.map(h => h.notation);
     if (moves.length < 2) return;
     if (!autoSaveId) autoSaveId = Date.now();
     const prev = getGames().find(g => g.id === autoSaveId);
     const startBoard = gameState.history[0] && gameState.history[0].board;
+    const names = getPlayerNames();
     upsertGame({
         id: autoSaveId,
         start: autoSaveCustom && startBoard
@@ -937,15 +948,189 @@ function autoSaveGame(result, reason) {
         result: result || (gameState.gameOver ? gameState.winner : (prev && prev.result) || 'unfinished'),
         resultReason: reason || (prev && prev.resultReason) || null,
         playerColor: turnController.humanColor,
+        white: names.white || (prev && prev.white) || undefined,
+        black: names.black || (prev && prev.black) || undefined,
         free: true
     });
+    savedPly = moves.length;
+}
+
+function manualSaveGame() {
+    if (!gameState || matchPlayActive || autoSaveOff) return;
+    const res = gameState.gameOver ? gameState.winner : null;
+    autoSaveGame(res, gameState.gameOver ? (gameState.gameOverReason || null) : null, true);
+    updateSaveButton();
+}
+
+function updateSaveButton() {
+    const b = document.getElementById('btn-save-game');
+    if (!b || !gameState) return;
+    const n = gameState.history.length;
+    const can = n >= 2 && !autoSaveOff && !matchPlayActive;
+    const saved = can && autoSaveId && savedPly === n;
+    b.disabled = !can || saved;
+    b.classList.toggle('saved', !!saved);
+    b.classList.toggle('pulse', can && !saved && !!gameState.gameOver);
+    b.textContent = saved ? '✓ Enregistrée' : '💾 Enregistrer';
+}
+
+function setupSaveAndNames() {
+    try {
+        const nm = JSON.parse(localStorage.getItem('sambrk.names') || '{}');
+        const w = document.getElementById('inp-white-name'), b = document.getElementById('inp-black-name');
+        if (w && nm.white) w.value = nm.white;
+        if (b && nm.black) b.value = nm.black;
+        autoSaveEnabled = localStorage.getItem('sambrk.autosave') === '1';
+    } catch (e) {}
+    const chk = document.getElementById('chk-autosave');
+    if (chk) {
+        chk.checked = autoSaveEnabled;
+        chk.addEventListener('change', () => {
+            autoSaveEnabled = chk.checked;
+            try { localStorage.setItem('sambrk.autosave', autoSaveEnabled ? '1' : '0'); } catch (e) {}
+            if (autoSaveEnabled) autoSaveGame();
+            updateSaveButton();
+        });
+    }
+    for (const id of ['inp-white-name', 'inp-black-name']) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', () => {
+            try { localStorage.setItem('sambrk.names', JSON.stringify(getPlayerNames())); } catch (e) {}
+            // si la partie est déjà enregistrée, le nom suit
+            if (autoSaveId && savedPly >= 0) { savedPly = -1; if (autoSaveEnabled) autoSaveGame(); }
+            updateSaveButton();
+        });
+    }
+    const sb = document.getElementById('btn-save-game');
+    if (sb) sb.addEventListener('click', manualSaveGame);
+    setInterval(updateSaveButton, 400);
+    updateSaveButton();
+}
+
+// --- Vidéo de la partie (caméra et micro facultatifs) ---
+
+let recState = null;
+
+function pickMime() {
+    const list = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+    if (typeof MediaRecorder === 'undefined') return null;
+    for (const t of list) { try { if (MediaRecorder.isTypeSupported(t)) return t; } catch (e) {} }
+    return '';
+}
+
+function drawRecFrame(r) {
+    const { cv, ctx, board, video, W, H, SP } = r;
+    ctx.fillStyle = '#2b1a0e'; ctx.fillRect(0, 0, W, H);
+    const bs = H;
+    const sc = Math.min(bs / board.width, bs / board.height);
+    const bw = board.width * sc, bh = board.height * sc;
+    try { ctx.drawImage(board, (bs - bw) / 2, (bs - bh) / 2, bw, bh); } catch (e) {}
+    const x0 = bs + 14; let y = 14;
+    if (video && video.videoWidth) {
+        const cw = SP - 28, ch = Math.round(cw * video.videoHeight / video.videoWidth);
+        try { ctx.drawImage(video, x0, y, cw, ch); } catch (e) {}
+        ctx.strokeStyle = '#f0c35e'; ctx.lineWidth = 2; ctx.strokeRect(x0, y, cw, ch);
+        y += ch + 14;
+    }
+    const names = getPlayerNames();
+    ctx.fillStyle = '#f5e6c8'; ctx.font = 'bold 17px sans-serif'; ctx.textBaseline = 'top';
+    ctx.fillText('⚪ ' + (names.white || 'Blancs'), x0, y); y += 24;
+    ctx.fillText('⚫ ' + (names.black || 'Noirs'), x0, y); y += 32;
+    ctx.font = '15px sans-serif'; ctx.fillStyle = '#e8d3a8';
+    const mv = gameState ? gameState.history.map(h => h.notation) : [];
+    const rows = [];
+    for (let i = 0; i < mv.length; i += 2) rows.push((i / 2 + 1) + '. ' + mv[i] + (mv[i + 1] ? '  ' + mv[i + 1] : ''));
+    const maxRows = Math.max(1, Math.floor((H - y - 36) / 20));
+    for (const line of rows.slice(-maxRows)) { ctx.fillText(line, x0, y); y += 20; }
+    const s = Math.floor((Date.now() - r.t0) / 1000);
+    ctx.fillStyle = '#ff5a5a'; ctx.beginPath(); ctx.arc(x0 + 8, H - 22, 6, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 15px sans-serif';
+    ctx.fillText(String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'), x0 + 22, H - 31);
+}
+
+async function startRec() {
+    const btn = document.getElementById('btn-rec');
+    const board = document.getElementById('board');
+    const mime = pickMime();
+    if (mime === null || !board || !board.captureStream && !HTMLCanvasElement.prototype.captureStream) {
+        alert("Ce navigateur ne sait pas filmer. Essayez avec Chrome, Edge ou Firefox.");
+        return;
+    }
+    const useCam = !!(document.getElementById('chk-rec-cam') || {}).checked;
+    const useMic = !!(document.getElementById('chk-rec-mic') || {}).checked;
+    let media = null, video = null;
+    if ((useCam || useMic) && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+            media = await navigator.mediaDevices.getUserMedia({
+                video: useCam ? { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' } : false,
+                audio: useMic
+            });
+        } catch (e) {
+            alert("Caméra ou micro refusés ou introuvables. La partie sera filmée sans.");
+            media = null;
+        }
+    } else if (useCam || useMic) {
+        alert("La caméra n'est pas disponible ici (il faut un site sécurisé https). La partie sera filmée sans.");
+    }
+    if (media && useCam && media.getVideoTracks().length) {
+        video = document.createElement('video');
+        video.muted = true; video.playsInline = true; video.srcObject = media;
+        try { await video.play(); } catch (e) {}
+    }
+    const H = 640, SP = 260, W = H + SP;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    const r = { cv, ctx, board, video, W, H, SP, t0: Date.now(), media, chunks: [] };
+    drawRecFrame(r);
+    const out = cv.captureStream(15);
+    if (media) for (const t of media.getAudioTracks()) out.addTrack(t);
+    let mr;
+    try { mr = mime ? new MediaRecorder(out, { mimeType: mime, videoBitsPerSecond: 2500000 }) : new MediaRecorder(out); }
+    catch (e) { alert('Impossible de démarrer la vidéo : ' + e.message); if (media) media.getTracks().forEach(t => t.stop()); return; }
+    r.mr = mr;
+    mr.ondataavailable = (e) => { if (e.data && e.data.size) r.chunks.push(e.data); };
+    mr.onstop = () => {
+        clearInterval(r.timer);
+        if (media) media.getTracks().forEach(t => t.stop());
+        const type = (mr.mimeType || mime || 'video/webm');
+        const blob = new Blob(r.chunks, { type });
+        const ext = /mp4/.test(type) ? 'mp4' : 'webm';
+        const d = new Date(), pad = n => String(n).padStart(2, '0');
+        const name = `sambrk-partie-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.${ext}`;
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+        recState = null;
+        if (btn) { btn.classList.remove('recording'); btn.textContent = '🎥 Filmer'; }
+        r.blob = blob; window.__lastRec = { name, size: blob.size, type };
+    };
+    r.timer = setInterval(() => {
+        drawRecFrame(r);
+        if (btn) {
+            const s = Math.floor((Date.now() - r.t0) / 1000);
+            btn.textContent = '⏹ Arrêter ' + String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+        }
+    }, 66);
+    mr.start(1000);
+    recState = r;
+    if (btn) btn.classList.add('recording');
+}
+
+function toggleRec() {
+    if (recState) { try { recState.mr.stop(); } catch (e) {} return; }
+    startRec();
+}
+
+function setupRec() {
+    const b = document.getElementById('btn-rec');
+    if (b) b.addEventListener('click', toggleRec);
 }
 
 function setupAutoSave() {
     if (!gameState) return;
-    gameState.addEventListener('newGame', () => { autoSaveId = null; autoSaveOff = false; autoSaveCustom = false; });
-    gameState.addEventListener('positionChanged', () => { autoSaveId = null; autoSaveOff = false; autoSaveCustom = true; });
-    gameState.addEventListener('gameLoaded', () => { autoSaveId = null; autoSaveOff = true; autoSaveCustom = false; });
+    gameState.addEventListener('newGame', () => { savedPly = -1; autoSaveId = null; autoSaveOff = false; autoSaveCustom = false; });
+    gameState.addEventListener('positionChanged', () => { savedPly = -1; autoSaveId = null; autoSaveOff = false; autoSaveCustom = true; });
+    gameState.addEventListener('gameLoaded', () => { savedPly = -1; autoSaveId = null; autoSaveOff = true; autoSaveCustom = false; });
     gameState.addEventListener('move', () => autoSaveGame());
     gameState.addEventListener('gameOver', (e) => autoSaveGame(e.detail.winner, e.detail.reason));
 }
@@ -2593,6 +2778,8 @@ function setupEventHandlers() {
 
     setupExtAnalysis();
     setupAutoSave();
+    setupSaveAndNames();
+    setupRec();
     setupNavButtons();
     setupLearning();
     setupAutoCapture();
