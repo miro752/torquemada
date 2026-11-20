@@ -140,6 +140,7 @@ export class BoardUI {
 
         // Personnalisation (couleurs du damier et des pions), gardée dans le navigateur
         this.pieceStyle = 'relief';
+        this.squareStyle = 'flat';   // 'flat' (couleurs unies) ou un marbre
         this.showNumbers = false;
         this.showArrow = true;
         this.boardSize = 560;     // taille du damier en pixels (réglable)
@@ -308,8 +309,14 @@ export class BoardUI {
 
                 // Square color
                 const isDark = (row + col) % 2 === 1;
-                ctx.fillStyle = isDark ? this.colors.darkSquare : this.colors.lightSquare;
-                ctx.fillRect(x, y, sq, sq);
+                const tex = this.squareStyle !== 'flat' ? this._marbleTex() : null;
+                if (tex) {
+                    const src = isDark ? tex.dark : tex.light, k = src.width / (sq * 8);
+                    ctx.drawImage(src, x * k, y * k, sq * k, sq * k, x, y, sq, sq);
+                } else {
+                    ctx.fillStyle = isDark ? this.colors.darkSquare : this.colors.lightSquare;
+                    ctx.fillRect(x, y, sq, sq);
+                }
             }
         }
 
@@ -464,7 +471,7 @@ export class BoardUI {
         // Draw piece body
         const base = isWhite ? this.colors.whitePiece : this.colors.blackPiece;
         const edge = isWhite ? this.colors.whitePieceStroke : this.colors.blackPieceStroke;
-        if (['jeton', 'bouton', 'gemme', 'verre'].includes(this.pieceStyle)) {
+        if (['jeton', 'bouton', 'gemme', 'verre', 'metal'].includes(this.pieceStyle)) {
             this._drawFancyPiece(x, y, radius, base, edge, isKing);
             ctx.globalAlpha = prevAlpha;
             return;
@@ -644,6 +651,8 @@ export class BoardUI {
             ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.stroke();
             ctx.beginPath(); pts.forEach(([px, py], i) => { const qx = x + (px - x) * 0.55, qy = y + (py - y) * 0.55; i ? ctx.lineTo(qx, qy) : ctx.moveTo(qx, qy); }); ctx.closePath();
             ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.stroke();
+        } else if (st === 'metal') {
+            this._drawMetal(x, y, r, base, isKing);
         } else { // verre
             ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
             const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.05, x, y, r * 1.05);
@@ -655,6 +664,94 @@ export class BoardUI {
         if (isKing) this._crown(x, y + r * 0.04, r);
     }
 
+
+    // ---------- Marbre (texture générée, gardée en mémoire) ----------
+    static get MARBLES() {
+        return {
+            marbreNoir:  { dark: { base: [18, 18, 20], cloud: [52, 52, 56], vein: [226, 226, 232], v: 0.55 }, light: { base: [239, 233, 214], cloud: [214, 203, 172], vein: [167, 148, 99], v: 0.5 } },
+            marbreVert:  { dark: { base: [18, 53, 36], cloud: [34, 98, 66], vein: [196, 232, 212], v: 0.5 }, light: { base: [243, 242, 235], cloud: [220, 220, 208], vein: [150, 160, 140], v: 0.45 } },
+            marbreRouge: { dark: { base: [58, 18, 22], cloud: [104, 36, 44], vein: [236, 206, 196], v: 0.5 }, light: { base: [244, 237, 226], cloud: [224, 207, 190], vein: [181, 138, 122], v: 0.45 } }
+        };
+    }
+    _marbleTex() {
+        const pal = BoardUI.MARBLES[this.squareStyle];
+        if (!pal) return null;
+        const px = Math.max(64, Math.round(this.squareSize * 8 / 2) * 2);
+        const key = this.squareStyle + ':' + px;
+        if (this._mc && this._mc.key === key) return this._mc.tex;
+        const tex = { dark: this._marbleMake(px, pal.dark, 11), light: this._marbleMake(px, pal.light, 5) };
+        this._mc = { key, tex };
+        return tex;
+    }
+    _marbleMake(size, pal, seed) {
+        const w = Math.max(32, size >> 1), c = document.createElement('canvas');
+        c.width = c.height = w;
+        const g = c.getContext('2d'), img = g.createImageData(w, w), d = img.data;
+        let st = seed * 2654435761 >>> 0;
+        const rnd = () => { st = (st + 0x6D2B79F5) >>> 0; let t = st; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+        const N = 64, lat = new Float32Array(N * N);
+        for (let i = 0; i < lat.length; i++) lat[i] = rnd();
+        const sm = t => t * t * (3 - 2 * t);
+        const noise = (x, y) => {
+            const xi = Math.floor(x), yi = Math.floor(y), u = sm(x - xi), v = sm(y - yi);
+            const a = lat[(yi & 63) * N + (xi & 63)], b = lat[(yi & 63) * N + ((xi + 1) & 63)];
+            const c2 = lat[((yi + 1) & 63) * N + (xi & 63)], d2 = lat[((yi + 1) & 63) * N + ((xi + 1) & 63)];
+            return a + (b - a) * u + (c2 - a) * v + (a - b - c2 + d2) * u * v;
+        };
+        const fbm = (x, y, o) => { let a = 0, amp = 0.5, f = 1; for (let i = 0; i < o; i++) { a += amp * noise(x * f, y * f); f *= 2; amp *= 0.5; } return a; };
+        for (let y = 0; y < w; y++) {
+            for (let x = 0; x < w; x++) {
+                const nx = x / w * 4.2, ny = y / w * 4.2;
+                const wx = fbm(nx + 5.2, ny + 1.3, 3), wy = fbm(nx + 9.7, ny + 3.1, 3);
+                const n = fbm(nx + 2.4 * wx, ny + 2.4 * wy, 4);
+                const ridge = Math.pow(Math.max(0, 1 - Math.abs(2 * n - 1) * 8), 1.5);   // lignes fines
+                const cl = fbm(nx * 1.6 + 7, ny * 1.6 + 2, 3);
+                const i = (y * w + x) * 4, vv = ridge * pal.v;
+                for (let k = 0; k < 3; k++) {
+                    let col = pal.base[k] + (pal.cloud[k] - pal.base[k]) * cl * 0.7;
+                    col = col + (pal.vein[k] - col) * vv;
+                    d[i + k] = col;
+                }
+                d[i + 3] = 255;
+            }
+        }
+        g.putImageData(img, 0, 0);
+        return c;
+    }
+    _drawMetal(x, y, r, base, isKing) {
+        const ctx = this.ctx;
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = this._shade(base, -0.45); ctx.fill();
+        const body = (rr) => {
+            ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2);
+            if (ctx.createConicGradient) {
+                const g = ctx.createConicGradient(0.35, x, y);
+                const L = this._shade(base, 0.6), M = base, D = this._shade(base, -0.28);
+                [[0, L], [0.12, M], [0.25, D], [0.38, L], [0.5, M], [0.62, D], [0.78, L], [0.9, M], [1, L]].forEach(([o, c]) => g.addColorStop(o, c));
+                ctx.fillStyle = g;
+            } else {
+                const g = ctx.createRadialGradient(x - rr * 0.3, y - rr * 0.3, rr * 0.1, x, y, rr);
+                g.addColorStop(0, this._shade(base, 0.5)); g.addColorStop(1, this._shade(base, -0.2));
+                ctx.fillStyle = g;
+            }
+            ctx.fill();
+        };
+        body(r * 0.95);
+        // fines rainures circulaires (aspect métal brossé)
+        ctx.lineWidth = 1;
+        for (let k = 1; k <= 7; k++) {
+            ctx.beginPath(); ctx.arc(x, y, r * 0.95 * k / 8, 0, Math.PI * 2);
+            ctx.strokeStyle = k % 2 ? 'rgba(0,0,0,.07)' : 'rgba(255,255,255,.10)'; ctx.stroke();
+        }
+        // bord biseauté
+        ctx.beginPath(); ctx.arc(x, y, r * 0.95, 0, Math.PI * 2);
+        ctx.lineWidth = Math.max(1.5, r * 0.06); ctx.strokeStyle = this._shade(base, 0.45); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, r * 0.98, 0, Math.PI * 2);
+        ctx.lineWidth = 1.5; ctx.strokeStyle = this._shade(base, -0.6); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, r * 0.76, 0, Math.PI * 2);
+        ctx.lineWidth = 1; ctx.strokeStyle = this._shade(base, -0.4); ctx.stroke();
+    }
+
     // ---------- Personnalisation ----------
     _loadCustom() {
         try {
@@ -662,6 +759,7 @@ export class BoardUI {
             if (o) {
                 for (const k of ['lightSquare', 'darkSquare', 'whitePiece', 'blackPiece', 'kingMark']) if (o[k]) this.colors[k] = o[k];
                 if (o.pieceStyle) this.pieceStyle = o.pieceStyle;
+                if (o.squareStyle) this.squareStyle = o.squareStyle;
                 if (typeof o.showNumbers === 'boolean') this.showNumbers = o.showNumbers;
                 if (typeof o.showArrow === 'boolean') this.showArrow = o.showArrow;
                 if (typeof o.boardSize === 'number' && o.boardSize >= 260 && o.boardSize <= 1400) this.boardSize = o.boardSize;
@@ -673,7 +771,7 @@ export class BoardUI {
     _saveCustom() {
         try {
             const c = this.colors;
-            localStorage.setItem('damas.custom', JSON.stringify({ lightSquare: c.lightSquare, darkSquare: c.darkSquare, whitePiece: c.whitePiece, blackPiece: c.blackPiece, kingMark: c.kingMark, pieceStyle: this.pieceStyle, showNumbers: this.showNumbers, showArrow: this.showArrow, boardSize: this.boardSize, focusMode: this.focusMode }));
+            localStorage.setItem('damas.custom', JSON.stringify({ lightSquare: c.lightSquare, darkSquare: c.darkSquare, whitePiece: c.whitePiece, blackPiece: c.blackPiece, kingMark: c.kingMark, pieceStyle: this.pieceStyle, squareStyle: this.squareStyle, showNumbers: this.showNumbers, showArrow: this.showArrow, boardSize: this.boardSize, focusMode: this.focusMode }));
         } catch (e) {}
     }
     _shade(hex, f) { // f<0 assombrit, f>0 éclaircit
@@ -703,23 +801,30 @@ export class BoardUI {
         const rows = [['lightSquare', 'Cases claires'], ['darkSquare', 'Cases foncées'], ['whitePiece', 'Pions blancs'], ['blackPiece', 'Pions noirs'], ['kingMark', 'Marque des dames']];
         let html = '<b>Personnaliser</b><div style="height:8px"></div>';
         for (const [k, l] of rows) html += `<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">${l}<input type="color" data-k="${k}" style="margin-left:12px;width:48px;height:28px;padding:0;border:1px solid #888"></label>`;
-        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Style des pions<select data-k="pieceStyle" style="margin-left:12px"><option value="relief">Relief</option><option value="flat">Plat</option><option value="ring">Anneau</option><option value="anneaux">Anneaux (photo)</option><option value="disc3d">Disque 3D</option><option value="jeton">Jeton</option><option value="bouton">Bouton</option><option value="gemme">Gemme</option><option value="verre">Verre</option></select></label>';
+        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Cases<select data-k="squareStyle" style="margin-left:12px"><option value="flat">Couleurs unies</option><option value="marbreNoir">Marbre noir et crème</option><option value="marbreVert">Marbre vert</option><option value="marbreRouge">Marbre rouge</option></select></label>';
+        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Style des pions<select data-k="pieceStyle" style="margin-left:12px"><option value="relief">Relief</option><option value="flat">Plat</option><option value="ring">Anneau</option><option value="anneaux">Anneaux (photo)</option><option value="disc3d">Disque 3D</option><option value="jeton">Jeton</option><option value="bouton">Bouton</option><option value="gemme">Gemme</option><option value="verre">Verre</option><option value="metal">Métal</option></select></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Numéros des cases (1-32)<input type="checkbox" data-k="showNumbers" style="margin-left:12px;width:20px;height:20px"></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Flèches (dernier coup / meilleur coup)<input type="checkbox" data-k="showArrow" style="margin-left:12px;width:20px;height:20px"></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Taille du damier<input type="range" data-k="boardSize" min="300" max="1000" step="10" style="margin-left:12px;width:120px"></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Grand damier (masque les panneaux)<input type="checkbox" data-k="focusMode" style="margin-left:12px;width:20px;height:20px"></label>';
-        html += '<div style="height:8px"></div><button data-photo style="padding:5px 10px;cursor:pointer;margin-right:6px">Style photo</button><button data-reset style="padding:5px 10px;cursor:pointer">Couleurs par défaut</button>';
+        html += '<div style="height:8px"></div><button data-photo style="padding:5px 10px;cursor:pointer;margin-right:6px">Style photo</button><button data-marble style="padding:5px 10px;cursor:pointer;margin-right:6px">Style marbre</button><button data-reset style="padding:5px 10px;cursor:pointer">Couleurs par défaut</button>';
         panel.innerHTML = html;
-        const sync = () => panel.querySelectorAll('[data-k]').forEach(el => { if (el.dataset.k === 'showNumbers') el.checked = this.showNumbers; else if (el.dataset.k === 'showArrow') el.checked = this.showArrow; else if (el.dataset.k === 'focusMode') el.checked = this.focusMode; else if (el.dataset.k === 'boardSize') el.value = this.boardSize; else el.value = el.dataset.k === 'pieceStyle' ? this.pieceStyle : this.colors[el.dataset.k]; });
+        const sync = () => panel.querySelectorAll('[data-k]').forEach(el => { if (el.dataset.k === 'showNumbers') el.checked = this.showNumbers; else if (el.dataset.k === 'showArrow') el.checked = this.showArrow; else if (el.dataset.k === 'focusMode') el.checked = this.focusMode; else if (el.dataset.k === 'boardSize') el.value = this.boardSize; else el.value = el.dataset.k === 'pieceStyle' ? this.pieceStyle : el.dataset.k === 'squareStyle' ? this.squareStyle : this.colors[el.dataset.k]; });
         panel.addEventListener('input', (e) => {
             const k = e.target.dataset && e.target.dataset.k; if (!k) return;
-            if (k === 'showNumbers') this.showNumbers = e.target.checked; else if (k === 'showArrow') this.showArrow = e.target.checked; else if (k === 'focusMode') this.focusMode = e.target.checked; else if (k === 'boardSize') this.boardSize = parseInt(e.target.value, 10); else if (k === 'pieceStyle') this.pieceStyle = e.target.value; else this.colors[k] = e.target.value;
+            if (k === 'showNumbers') this.showNumbers = e.target.checked; else if (k === 'showArrow') this.showArrow = e.target.checked; else if (k === 'focusMode') this.focusMode = e.target.checked; else if (k === 'boardSize') this.boardSize = parseInt(e.target.value, 10); else if (k === 'pieceStyle') this.pieceStyle = e.target.value; else if (k === 'squareStyle') this.squareStyle = e.target.value; else this.colors[k] = e.target.value;
             this._deriveStrokes(); this._saveCustom();
             if (k === 'focusMode' || k === 'boardSize') { this.applySize(); zoomBtn.textContent = this.focusMode ? '\u{1F50D} Réduire' : '\u{1F50D} Agrandir'; } else this.render();
         });
         panel.querySelector('[data-reset]').addEventListener('click', () => {
             for (const k in DEF) { if (k === 'pieceStyle') this.pieceStyle = DEF[k]; else this.colors[k] = DEF[k]; }
+            this.squareStyle = 'flat';
             this.showNumbers = false; this.showArrow = true; this.boardSize = 560; this.focusMode = false; this._deriveStrokes(); this._saveCustom(); sync(); this.applySize(); zoomBtn.textContent = '\u{1F50D} Agrandir';
+        });
+        panel.querySelector('[data-marble]').addEventListener('click', () => {
+            Object.assign(this.colors, { whitePiece: '#cdd2da', blackPiece: '#d9a62e', kingMark: '#ffe08a' });
+            this.squareStyle = 'marbreNoir'; this.pieceStyle = 'metal'; this.showNumbers = true; this.showArrow = true;
+            this._deriveStrokes(); this._saveCustom(); sync(); this.render();
         });
         panel.querySelector('[data-photo]').addEventListener('click', () => {
             Object.assign(this.colors, { lightSquare: '#1d1d3d', darkSquare: '#dc1f46', whitePiece: '#b9b5ea', blackPiece: '#e51c1c', kingMark: '#FFD700' });
