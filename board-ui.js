@@ -471,7 +471,7 @@ export class BoardUI {
         // Draw piece body
         const base = isWhite ? this.colors.whitePiece : this.colors.blackPiece;
         const edge = isWhite ? this.colors.whitePieceStroke : this.colors.blackPieceStroke;
-        if (['jeton', 'bouton', 'gemme', 'verre', 'metal'].includes(this.pieceStyle)) {
+        if (['jeton', 'bouton', 'gemme', 'verre', 'metal', 'brillant'].includes(this.pieceStyle)) {
             this._drawFancyPiece(x, y, radius, base, edge, isKing);
             ctx.globalAlpha = prevAlpha;
             return;
@@ -653,6 +653,9 @@ export class BoardUI {
             ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.stroke();
         } else if (st === 'metal') {
             this._drawMetal(x, y, r, base, isKing);
+        } else if (st === 'brillant') {
+            this._drawGloss(x, y, r, base, isKing);
+            return;
         } else { // verre
             ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
             const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.05, x, y, r * 1.05);
@@ -664,6 +667,57 @@ export class BoardUI {
         if (isKing) this._crown(x, y + r * 0.04, r);
     }
 
+
+
+    // Pion « brillant » : bille de verre, liseré doré, couronne pour les dames
+    _drawGloss(x, y, r, base, isKing) {
+        const ctx = this.ctx;
+        const n = parseInt(base.slice(1), 16), lum = ((n >> 16) * 0.3 + ((n >> 8) & 255) * 0.59 + (n & 255) * 0.11);
+        // liseré doré
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+        const rim = ctx.createLinearGradient(x - r, y - r, x + r, y + r);
+        rim.addColorStop(0, '#fff3c4'); rim.addColorStop(0.5, '#d9b24a'); rim.addColorStop(1, '#fff0b8');
+        ctx.fillStyle = rim; ctx.fill();
+        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(80,55,10,.7)'; ctx.stroke();
+        // bille
+        const rr = r * 0.9;
+        ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2);
+        const g = ctx.createRadialGradient(x - rr * 0.25, y - rr * 0.3, rr * 0.05, x, y, rr);
+        g.addColorStop(0, this._shade(base, 0.45)); g.addColorStop(0.45, base); g.addColorStop(1, this._shade(base, -0.55));
+        ctx.fillStyle = g; ctx.fill();
+        // reflet haut
+        ctx.beginPath(); ctx.ellipse(x - rr * 0.1, y - rr * 0.5, rr * 0.55, rr * 0.28, -0.1, 0, Math.PI * 2);
+        const h = ctx.createLinearGradient(0, y - rr * 0.8, 0, y - rr * 0.2);
+        h.addColorStop(0, 'rgba(255,255,255,' + (lum < 90 ? 0.55 : 0.8) + ')'); h.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = h; ctx.fill();
+        // reflet bas discret
+        ctx.beginPath(); ctx.ellipse(x, y + rr * 0.55, rr * 0.5, rr * 0.18, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fill();
+        if (isKing) this._crownGloss(x, y + rr * 0.05, rr, lum < 110);
+    }
+    _crownGloss(x, y, r, onDark) {
+        const ctx = this.ctx, w = r * 0.58, hgt = r * 0.46;
+        const col = onDark ? '#ffd45a' : '#161616';
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x - w, y + hgt * 0.7);
+        ctx.lineTo(x - w * 1.05, y - hgt * 0.45);
+        ctx.lineTo(x - w * 0.5, y + hgt * 0.1);
+        ctx.lineTo(x, y - hgt * 0.85);
+        ctx.lineTo(x + w * 0.5, y + hgt * 0.1);
+        ctx.lineTo(x + w * 1.05, y - hgt * 0.45);
+        ctx.lineTo(x + w, y + hgt * 0.7);
+        ctx.closePath();
+        ctx.fillStyle = col; ctx.fill();
+        ctx.lineWidth = 1; ctx.strokeStyle = onDark ? 'rgba(80,45,0,.9)' : 'rgba(255,255,255,.55)'; ctx.stroke();
+        // base et boules
+        ctx.fillStyle = col;
+        ctx.fillRect(x - w, y + hgt * 0.78, w * 2, hgt * 0.28);
+        for (const [px, py] of [[-w * 1.05, -hgt * 0.5], [0, -hgt * 0.9], [w * 1.05, -hgt * 0.5]]) {
+            ctx.beginPath(); ctx.arc(x + px, y + py, r * 0.07, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+    }
 
     // ---------- Marbre (texture générée, gardée en mémoire) ----------
     static get MARBLES() {
@@ -802,12 +856,12 @@ export class BoardUI {
         let html = '<b>Personnaliser</b><div style="height:8px"></div>';
         for (const [k, l] of rows) html += `<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">${l}<input type="color" data-k="${k}" style="margin-left:12px;width:48px;height:28px;padding:0;border:1px solid #888"></label>`;
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Cases<select data-k="squareStyle" style="margin-left:12px"><option value="flat">Couleurs unies</option><option value="marbreNoir">Marbre noir et crème</option><option value="marbreVert">Marbre vert</option><option value="marbreRouge">Marbre rouge</option></select></label>';
-        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Style des pions<select data-k="pieceStyle" style="margin-left:12px"><option value="relief">Relief</option><option value="flat">Plat</option><option value="ring">Anneau</option><option value="anneaux">Anneaux (photo)</option><option value="disc3d">Disque 3D</option><option value="jeton">Jeton</option><option value="bouton">Bouton</option><option value="gemme">Gemme</option><option value="verre">Verre</option><option value="metal">Métal</option></select></label>';
+        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Style des pions<select data-k="pieceStyle" style="margin-left:12px"><option value="relief">Relief</option><option value="flat">Plat</option><option value="ring">Anneau</option><option value="anneaux">Anneaux (photo)</option><option value="disc3d">Disque 3D</option><option value="jeton">Jeton</option><option value="bouton">Bouton</option><option value="gemme">Gemme</option><option value="verre">Verre</option><option value="metal">Métal</option><option value="brillant">Brillant (liseré doré)</option></select></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Numéros des cases (1-32)<input type="checkbox" data-k="showNumbers" style="margin-left:12px;width:20px;height:20px"></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Flèches (dernier coup / meilleur coup)<input type="checkbox" data-k="showArrow" style="margin-left:12px;width:20px;height:20px"></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Taille du damier<input type="range" data-k="boardSize" min="300" max="1000" step="10" style="margin-left:12px;width:120px"></label>';
         html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Grand damier (masque les panneaux)<input type="checkbox" data-k="focusMode" style="margin-left:12px;width:20px;height:20px"></label>';
-        html += '<div style="height:8px"></div><button data-photo style="padding:5px 10px;cursor:pointer;margin-right:6px">Style photo</button><button data-marble style="padding:5px 10px;cursor:pointer;margin-right:6px">Style marbre</button><button data-reset style="padding:5px 10px;cursor:pointer">Couleurs par défaut</button>';
+        html += '<div style="height:8px"></div><button data-photo style="padding:5px 10px;cursor:pointer;margin-right:6px">Style photo</button><button data-marble style="padding:5px 10px;cursor:pointer;margin-right:6px">Style marbre</button><button data-gloss style="padding:5px 10px;cursor:pointer;margin-right:6px">Style brillant</button><button data-reset style="padding:5px 10px;cursor:pointer">Couleurs par défaut</button>';
         panel.innerHTML = html;
         const sync = () => panel.querySelectorAll('[data-k]').forEach(el => { if (el.dataset.k === 'showNumbers') el.checked = this.showNumbers; else if (el.dataset.k === 'showArrow') el.checked = this.showArrow; else if (el.dataset.k === 'focusMode') el.checked = this.focusMode; else if (el.dataset.k === 'boardSize') el.value = this.boardSize; else el.value = el.dataset.k === 'pieceStyle' ? this.pieceStyle : el.dataset.k === 'squareStyle' ? this.squareStyle : this.colors[el.dataset.k]; });
         panel.addEventListener('input', (e) => {
@@ -820,6 +874,11 @@ export class BoardUI {
             for (const k in DEF) { if (k === 'pieceStyle') this.pieceStyle = DEF[k]; else this.colors[k] = DEF[k]; }
             this.squareStyle = 'flat';
             this.showNumbers = false; this.showArrow = true; this.boardSize = 560; this.focusMode = false; this._deriveStrokes(); this._saveCustom(); sync(); this.applySize(); zoomBtn.textContent = '\u{1F50D} Agrandir';
+        });
+        panel.querySelector('[data-gloss]').addEventListener('click', () => {
+            Object.assign(this.colors, { lightSquare: '#d3a96b', darkSquare: '#c19347', whitePiece: '#1fbf2a', blackPiece: '#1b1b1b', kingMark: '#ffd45a' });
+            this.squareStyle = 'flat'; this.pieceStyle = 'brillant'; this.showNumbers = true; this.showArrow = true;
+            this._deriveStrokes(); this._saveCustom(); sync(); this.render();
         });
         panel.querySelector('[data-marble]').addEventListener('click', () => {
             Object.assign(this.colors, { whitePiece: '#cdd2da', blackPiece: '#d9a62e', kingMark: '#ffe08a' });
