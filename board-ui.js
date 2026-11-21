@@ -146,6 +146,7 @@ export class BoardUI {
         this.boardSize = 560;     // taille du damier en pixels (réglable)
         this.focusMode = false;   // mode grand damier : panneaux masqués
         this.arrow = null;   // {from,to} flèche du meilleur coup
+        this.look = Object.assign({}, BoardUI.DEFAULT_LOOK);
         this._loadCustom();
         this._buildCustomPanel();
 
@@ -406,9 +407,9 @@ export class BoardUI {
         }
 
         if (this.showArrow && this.lastMove && this.lastMove.from && this.lastMove.to && this.lastMove.from !== this.lastMove.to) {
-            this._drawArrow(this.lastMove.path || [this.lastMove.from, this.lastMove.to], '#ffb020', '#5a3500');   // dernier coup joué : orange
+            this._drawArrow(this.lastMove.path || [this.lastMove.from, this.lastMove.to], this.look.arrLast, this._shade(this.look.arrLast, -0.75));   // dernier coup joué : orange
         }
-        if (this.arrow && this.showArrow) this._drawArrow(this.arrow.path || [this.arrow.from, this.arrow.to]);   // meilleur coup : vert
+        if (this.arrow && this.showArrow) this._drawArrow(this.arrow.path || [this.arrow.from, this.arrow.to], this.look.arrBest, this._shade(this.look.arrBest, -0.75));   // meilleur coup : vert
 
         // Draw square numbers (for debugging/learning)
         if (this.showNumbers) this._drawSquareNumbers();
@@ -568,7 +569,7 @@ export class BoardUI {
         // pointe : on raccourcit un peu le dernier segment
         const n = pts.length, L = pts[n - 1], P = pts[n - 2];
         const dx = L.x - P.x, dy = L.y - P.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
-        const head = s * 0.34, w = s * 0.085;
+        const ak = (this.look.arrW || 100) / 100, head = s * 0.34 * (0.6 + 0.4 * ak), w = s * 0.085 * ak;
         const tip = { x: L.x - ux * s * 0.08, y: L.y - uy * s * 0.08 };
         const base = { x: tip.x - ux * head, y: tip.y - uy * head };
         const first = pts[0], f1 = pts[1];
@@ -728,12 +729,13 @@ export class BoardUI {
         };
     }
     _marbleTex() {
-        const pal = BoardUI.MARBLES[this.squareStyle];
+        const pal = BoardUI.MARBLES[this.squareStyle] || BoardUI.WOODSQ[this.squareStyle];
         if (!pal) return null;
         const px = Math.max(64, Math.round(this.squareSize * 8 / 2) * 2);
         const key = this.squareStyle + ':' + px;
         if (this._mc && this._mc.key === key) return this._mc.tex;
-        const tex = { dark: this._marbleMake(px, pal.dark, 11), light: this._marbleMake(px, pal.light, 5) };
+        const mk = (pp, sd) => pp.wood ? this._woodMake(px, pp, sd) : this._marbleMake(px, pp, sd);
+        const tex = { dark: mk(pal.dark, 11), light: mk(pal.light, 5) };
         this._mc = { key, tex };
         return tex;
     }
@@ -818,14 +820,16 @@ export class BoardUI {
                 if (typeof o.showArrow === 'boolean') this.showArrow = o.showArrow;
                 if (typeof o.boardSize === 'number' && o.boardSize >= 260 && o.boardSize <= 1400) this.boardSize = o.boardSize;
                 if (typeof o.focusMode === 'boolean') this.focusMode = o.focusMode && window.innerWidth > 1000;
+                if (o.look && typeof o.look === 'object') Object.assign(this.look, o.look);
             }
         } catch (e) {}
         this._deriveStrokes();
+        try { this._applyLook(); } catch (e) {}
     }
     _saveCustom() {
         try {
             const c = this.colors;
-            localStorage.setItem('damas.custom', JSON.stringify({ lightSquare: c.lightSquare, darkSquare: c.darkSquare, whitePiece: c.whitePiece, blackPiece: c.blackPiece, kingMark: c.kingMark, pieceStyle: this.pieceStyle, squareStyle: this.squareStyle, showNumbers: this.showNumbers, showArrow: this.showArrow, boardSize: this.boardSize, focusMode: this.focusMode }));
+            localStorage.setItem('damas.custom', JSON.stringify({ lightSquare: c.lightSquare, darkSquare: c.darkSquare, whitePiece: c.whitePiece, blackPiece: c.blackPiece, kingMark: c.kingMark, pieceStyle: this.pieceStyle, squareStyle: this.squareStyle, showNumbers: this.showNumbers, showArrow: this.showArrow, boardSize: this.boardSize, focusMode: this.focusMode, look: this.look }));
         } catch (e) {}
     }
     _shade(hex, f) { // f<0 assombrit, f>0 éclaircit
@@ -836,9 +840,133 @@ export class BoardUI {
         this.colors.whitePieceStroke = this._shade(this.colors.whitePiece, -0.6);
         this.colors.blackPieceStroke = this._shade(this.colors.blackPiece, -0.6);
     }
+    // ---------- Fond, cadre, bois : textures générées (aucun fichier) ----------
+    static get DEFAULT_LOOK() {
+        return { bg: 'none', frame: 'none', frameColor: '#6b4226', numberColor: '', hiLast: '', hiSel: '', arrBest: '#2ee62e', arrLast: '#ffb020', arrW: 100 };
+    }
+    static get WOODS() {
+        return {
+            boisClair: { wood: 1, c1: [226, 190, 140], c2: [182, 130, 76] },
+            noyer:     { wood: 1, c1: [124, 82, 52],  c2: [64, 40, 24] },
+            cerisier:  { wood: 1, c1: [194, 104, 62], c2: [124, 56, 30] },
+            cedre:     { wood: 1, c1: [208, 156, 110], c2: [152, 100, 62] },
+            ebene:     { wood: 1, c1: [64, 46, 38],   c2: [24, 16, 13] }
+        };
+    }
+    static get WOODSQ() {
+        return {
+            boisClassique: { light: { wood: 1, c1: [238, 212, 166], c2: [214, 176, 118] }, dark: { wood: 1, c1: [158, 104, 64], c2: [104, 64, 36] } },
+            boisSombre:    { light: { wood: 1, c1: [214, 172, 118], c2: [176, 128, 78] },  dark: { wood: 1, c1: [52, 36, 30],   c2: [24, 16, 13] } }
+        };
+    }
+    _noiseKit(seed) {
+        let st = seed * 2654435761 >>> 0;
+        const rnd = () => { st = (st + 0x6D2B79F5) >>> 0; let t = st; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+        const N = 64, lat = new Float32Array(N * N);
+        for (let i = 0; i < lat.length; i++) lat[i] = rnd();
+        const sm = t => t * t * (3 - 2 * t);
+        const noise = (x, y) => {
+            const xi = Math.floor(x), yi = Math.floor(y), u = sm(x - xi), v = sm(y - yi);
+            const a = lat[(yi & 63) * N + (xi & 63)], b = lat[(yi & 63) * N + ((xi + 1) & 63)];
+            const c2 = lat[((yi + 1) & 63) * N + (xi & 63)], d2 = lat[((yi + 1) & 63) * N + ((xi + 1) & 63)];
+            return a + (b - a) * u + (c2 - a) * v + (a - b - c2 + d2) * u * v;
+        };
+        const fbm = (x, y, o) => { let a = 0, amp = 0.5, f = 1; for (let i = 0; i < o; i++) { a += amp * noise(x * f, y * f); f *= 2; amp *= 0.5; } return a; };
+        return { noise, fbm };
+    }
+    _woodMake(size, pal, seed) {
+        const w = Math.max(32, size >> 1), c = document.createElement('canvas');
+        c.width = c.height = w;
+        const g = c.getContext('2d'), img = g.createImageData(w, w), d = img.data;
+        const { noise, fbm } = this._noiseKit(seed + 3);
+        for (let y = 0; y < w; y++) {
+            for (let x = 0; x < w; x++) {
+                const nx = x / w, ny = y / w;
+                const warp = fbm(nx * 2.4 + seed, ny * 1.3 + 3, 3);
+                const r = ny * 9 + warp * 3.4;
+                let gr = r - Math.floor(r); gr = Math.pow(Math.abs(gr * 2 - 1), 1.6);
+                const fib = noise(nx * 70 + seed, ny * 5);
+                const t = Math.min(1, Math.max(0, gr * 0.62 + fib * 0.38));
+                const i = (y * w + x) * 4;
+                for (let k = 0; k < 3; k++) d[i + k] = pal.c1[k] + (pal.c2[k] - pal.c1[k]) * t;
+                d[i + 3] = 255;
+            }
+        }
+        g.putImageData(img, 0, 0);
+        return c;
+    }
+    /** Texture (canvas carré) pour le fond de la page ou le cadre */
+    _texCanvas(name) {
+        this._tc = this._tc || {};
+        if (this._tc[name]) return this._tc[name];
+        let c = null;
+        const W = BoardUI.WOODS[name], M = BoardUI.MARBLES[name];
+        if (W) c = this._woodMake(640, W, 17);
+        else if (M) c = this._marbleMake(640, M.dark, 23);
+        else if (name === 'ardoise' || name === 'feutre' || name === 'nuit') {
+            const n = 256; c = document.createElement('canvas'); c.width = c.height = n;
+            const g = c.getContext('2d'), img = g.createImageData(n, n), d = img.data;
+            const { fbm } = this._noiseKit(31);
+            const base = name === 'ardoise' ? [58, 64, 74] : name === 'feutre' ? [30, 92, 58] : [18, 22, 52];
+            for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+                const v = fbm(x / n * 18, y / n * 18, 3), gx = name === 'nuit' ? 1 - 0.6 * (y / n) : 1;
+                const i = (y * n + x) * 4, f = (0.82 + v * 0.36) * gx;
+                for (let k = 0; k < 3; k++) d[i + k] = Math.max(0, Math.min(255, base[k] * f));
+                d[i + 3] = 255;
+            }
+            g.putImageData(img, 0, 0);
+        }
+        if (c) this._tc[name] = c;
+        return c;
+    }
+    _hexA(hex, a) {
+        const n = parseInt(hex.slice(1), 16);
+        return `rgba(${n >> 16}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+    }
+    _bgUrl(name) {
+        this._tu = this._tu || {};
+        if (name === 'photo') { try { return localStorage.getItem('damas.bgphoto') || ''; } catch (e) { return ''; } }
+        if (this._tu[name]) return this._tu[name];
+        const c = this._texCanvas(name);
+        if (!c) return '';
+        try { this._tu[name] = c.toDataURL('image/jpeg', 0.86); } catch (e) { this._tu[name] = ''; }
+        return this._tu[name];
+    }
+    /** Applique fond de page, cadre et surbrillances (le look par défaut ne touche à rien) */
+    _applyLook() {
+        if (typeof document === 'undefined' || !document.body) return;
+        const L = this.look, b = document.body;
+        if (L.bg === 'photo') L.bg = 'none';
+        const url = L.bg !== 'none' ? this._bgUrl(L.bg) : '';
+        if (url) {
+            b.style.backgroundImage = `url("${url}")`;
+            b.style.backgroundSize = 'cover'; b.style.backgroundPosition = 'center'; b.style.backgroundAttachment = 'fixed';
+        } else {
+            b.style.backgroundImage = ''; b.style.backgroundSize = ''; b.style.backgroundPosition = ''; b.style.backgroundAttachment = '';
+        }
+        const bc = document.querySelector('.board-container');
+        if (bc) {
+            if (L.frame === 'color') { bc.style.background = L.frameColor; bc.style.backgroundSize = ''; }
+            else if (L.frame !== 'none' && this._bgUrl(L.frame)) { bc.style.background = `url("${this._bgUrl(L.frame)}") center/cover`; }
+            else bc.style.background = '';
+            bc.style.padding = L.frame !== 'none' ? '0.8rem' : '';
+        }
+        this.colors.lastMove = L.hiLast ? this._hexA(L.hiLast, 0.5) : 'rgba(155, 199, 0, 0.4)';
+        this.colors.selected = L.hiSel ? this._hexA(L.hiSel, 0.55) : 'rgba(255, 255, 0, 0.5)';
+    }
+
     _buildCustomPanel() {
         if (typeof document === 'undefined' || document.getElementById('custom-btn')) return;
         const DEF = { lightSquare: '#F0D9B5', darkSquare: '#B58863', whitePiece: '#FFFFFF', blackPiece: '#333333', kingMark: '#FFD700', pieceStyle: 'relief' };
+        const SK = {
+            classique: { name: 'Classique', colors: DEF, pieceStyle: 'relief', squareStyle: 'flat', numbers: false, look: {} },
+            bois:      { name: 'Bois', colors: { lightSquare: '#F0D9B5', darkSquare: '#B58863', whitePiece: '#f3e8d0', blackPiece: '#3b2a1e', kingMark: '#ffd45a' }, pieceStyle: 'relief', squareStyle: 'boisClassique', numbers: true, look: { bg: 'noyer', frame: 'ebene' } },
+            marbre:    { name: 'Marbre', colors: { whitePiece: '#cdd2da', blackPiece: '#d9a62e', kingMark: '#ffe08a' }, pieceStyle: 'metal', squareStyle: 'marbreNoir', numbers: true, look: { bg: 'ardoise', frame: 'marbreNoir' } },
+            brillant:  { name: 'Brillant', colors: { lightSquare: '#d3a96b', darkSquare: '#c19347', whitePiece: '#1fbf2a', blackPiece: '#1b1b1b', kingMark: '#ffd45a' }, pieceStyle: 'brillant', squareStyle: 'flat', numbers: true, look: { bg: 'cedre' } },
+            photo:     { name: 'Photo', colors: { lightSquare: '#1d1d3d', darkSquare: '#dc1f46', whitePiece: '#b9b5ea', blackPiece: '#e51c1c', kingMark: '#FFD700' }, pieceStyle: 'disc3d', squareStyle: 'flat', numbers: true, look: {} },
+            nuit:      { name: 'Nuit', colors: { lightSquare: '#7d86b8', darkSquare: '#2a2f55', whitePiece: '#e8ecff', blackPiece: '#14162b', kingMark: '#ffd45a' }, pieceStyle: 'verre', squareStyle: 'flat', numbers: true, look: { bg: 'nuit', frame: 'color', frameColor: '#1b1f3a', arrBest: '#35e0ff', arrLast: '#ffb020' } },
+            tournoi:   { name: 'Tournoi vert', colors: { lightSquare: '#ece6c9', darkSquare: '#2f6b4a', whitePiece: '#ffffff', blackPiece: '#222222', kingMark: '#FFD700' }, pieceStyle: 'relief', squareStyle: 'flat', numbers: true, look: { bg: 'feutre', frame: 'ebene' } }
+        };
         const btn = document.createElement('button');
         btn.id = 'custom-btn'; btn.textContent = '\u{1F3A8} Couleurs';
         btn.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:9999;padding:8px 12px;border-radius:8px;border:1px solid #888;background:#fff;color:#222;font:14px sans-serif;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.3)';
@@ -851,47 +979,73 @@ export class BoardUI {
             this._saveCustom(); sync(); this.applySize();
         });
         const panel = document.createElement('div');
-        panel.style.cssText = 'position:fixed;right:12px;bottom:56px;z-index:9999;display:none;padding:12px 14px;border-radius:10px;border:1px solid #888;background:#fff;color:#222;font:14px sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.35);min-width:230px';
-        const rows = [['lightSquare', 'Cases claires'], ['darkSquare', 'Cases foncées'], ['whitePiece', 'Pions blancs'], ['blackPiece', 'Pions noirs'], ['kingMark', 'Marque des dames']];
-        let html = '<b>Personnaliser</b><div style="height:8px"></div>';
-        for (const [k, l] of rows) html += `<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">${l}<input type="color" data-k="${k}" style="margin-left:12px;width:48px;height:28px;padding:0;border:1px solid #888"></label>`;
-        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Cases<select data-k="squareStyle" style="margin-left:12px"><option value="flat">Couleurs unies</option><option value="marbreNoir">Marbre noir et crème</option><option value="marbreVert">Marbre vert</option><option value="marbreRouge">Marbre rouge</option></select></label>';
-        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Style des pions<select data-k="pieceStyle" style="margin-left:12px"><option value="relief">Relief</option><option value="flat">Plat</option><option value="ring">Anneau</option><option value="anneaux">Anneaux (photo)</option><option value="disc3d">Disque 3D</option><option value="jeton">Jeton</option><option value="bouton">Bouton</option><option value="gemme">Gemme</option><option value="verre">Verre</option><option value="metal">Métal</option><option value="brillant">Brillant (liseré doré)</option></select></label>';
-        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Numéros des cases (1-32)<input type="checkbox" data-k="showNumbers" style="margin-left:12px;width:20px;height:20px"></label>';
-        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Flèches (dernier coup / meilleur coup)<input type="checkbox" data-k="showArrow" style="margin-left:12px;width:20px;height:20px"></label>';
-        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Taille du damier<input type="range" data-k="boardSize" min="300" max="1000" step="10" style="margin-left:12px;width:120px"></label>';
-        html += '<label style="display:flex;justify-content:space-between;align-items:center;margin:5px 0">Grand damier (masque les panneaux)<input type="checkbox" data-k="focusMode" style="margin-left:12px;width:20px;height:20px"></label>';
-        html += '<div style="height:8px"></div><button data-photo style="padding:5px 10px;cursor:pointer;margin-right:6px">Style photo</button><button data-marble style="padding:5px 10px;cursor:pointer;margin-right:6px">Style marbre</button><button data-gloss style="padding:5px 10px;cursor:pointer;margin-right:6px">Style brillant</button><button data-reset style="padding:5px 10px;cursor:pointer">Couleurs par défaut</button>';
+        panel.id = 'custom-panel';
+        panel.style.cssText = 'position:fixed;right:12px;bottom:56px;z-index:9999;display:none;padding:10px 12px;border-radius:10px;border:1px solid #888;background:#fff;color:#222;font:14px sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.35);width:300px;max-width:calc(100vw - 24px);max-height:calc(100vh - 80px);overflow:auto;box-sizing:border-box';
+        const ROW = 'display:flex;justify-content:space-between;align-items:center;margin:5px 0';
+        const color = (k, l) => `<label style="${ROW}">${l}<input type="color" data-k="${k}" style="margin-left:12px;width:48px;height:28px;padding:0;border:1px solid #888"></label>`;
+        const check = (k, l) => `<label style="${ROW}">${l}<input type="checkbox" data-k="${k}" style="margin-left:12px;width:20px;height:20px"></label>`;
+        const select = (k, l, opts) => `<label style="${ROW}">${l}<select data-k="${k}" style="margin-left:12px;max-width:150px">${opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></label>`;
+        const WOODOPT = [['boisClair', 'Bois clair'], ['noyer', 'Noyer'], ['cerisier', 'Cerisier'], ['cedre', 'Cèdre'], ['ebene', 'Ébène'], ['marbreNoir', 'Marbre noir'], ['marbreVert', 'Marbre vert']];
+        const tabs = [['skins', 'Skins'], ['damier', 'Damier'], ['pieces', 'Pièces'], ['fond', 'Fond'], ['fleches', 'Flèches'], ['affich', 'Affichage']];
+        const pages = {
+            skins: '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">' + Object.entries(SK).map(([k, v]) => `<button data-skin="${k}" style="padding:8px 6px;cursor:pointer">${v.name}</button>`).join('') + '</div><div style="height:8px"></div><button data-reset style="padding:5px 10px;cursor:pointer">Tout remettre par défaut</button>',
+            damier: select('squareStyle', 'Cases', [['flat', 'Couleurs unies'], ['boisClassique', 'Bois clair/foncé'], ['boisSombre', 'Bois et ébène'], ['marbreNoir', 'Marbre noir et crème'], ['marbreVert', 'Marbre vert'], ['marbreRouge', 'Marbre rouge']]) + color('lightSquare', 'Cases claires') + color('darkSquare', 'Cases foncées') + select('frame', 'Cadre', [['none', 'Par défaut'], ['color', 'Couleur unie'], ...WOODOPT]) + color('frameColor', 'Couleur du cadre') + color('hiLast', 'Dernier coup (case)') + color('hiSel', 'Case choisie') + check('showNumbers', 'Numéros des cases (1-32)') + color('numberColor', 'Couleur des numéros'),
+            pieces: select('pieceStyle', 'Style des pions', [['relief', 'Relief'], ['flat', 'Plat'], ['ring', 'Anneau'], ['anneaux', 'Anneaux (photo)'], ['disc3d', 'Disque 3D'], ['jeton', 'Jeton'], ['bouton', 'Bouton'], ['gemme', 'Gemme'], ['verre', 'Verre'], ['metal', 'Métal'], ['brillant', 'Brillant (liseré doré)']]) + color('whitePiece', 'Pions blancs') + color('blackPiece', 'Pions noirs') + color('kingMark', 'Marque des dames'),
+            fond: select('bg', 'Fond de la page', [['none', 'Par défaut'], ...WOODOPT, ['ardoise', 'Ardoise'], ['feutre', 'Feutre vert'], ['nuit', 'Nuit bleue']]),
+            fleches: check('showArrow', 'Flèches (dernier coup / meilleur coup)') + color('arrLast', 'Dernier coup joué') + color('arrBest', 'Meilleur coup') + `<label style="${ROW}">Épaisseur<input type="range" data-k="arrW" min="50" max="170" step="5" style="margin-left:12px;width:120px"></label>`,
+            affich: `<label style="${ROW}">Taille du damier<input type="range" data-k="boardSize" min="300" max="1000" step="10" style="margin-left:12px;width:120px"></label>` + check('focusMode', 'Grand damier (masque les panneaux)')
+        };
+        let html = '<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">' + tabs.map(([k, l]) => `<button data-tab="${k}" style="padding:5px 8px;cursor:pointer;border:1px solid #aaa;border-radius:6px;background:#eee;color:#222">${l}</button>`).join('') + '</div>';
+        html += tabs.map(([k]) => `<div data-page="${k}" style="display:none">${pages[k]}</div>`).join('');
         panel.innerHTML = html;
-        const sync = () => panel.querySelectorAll('[data-k]').forEach(el => { if (el.dataset.k === 'showNumbers') el.checked = this.showNumbers; else if (el.dataset.k === 'showArrow') el.checked = this.showArrow; else if (el.dataset.k === 'focusMode') el.checked = this.focusMode; else if (el.dataset.k === 'boardSize') el.value = this.boardSize; else el.value = el.dataset.k === 'pieceStyle' ? this.pieceStyle : el.dataset.k === 'squareStyle' ? this.squareStyle : this.colors[el.dataset.k]; });
+        const showTab = (t) => {
+            panel.querySelectorAll('[data-page]').forEach(d => { d.style.display = d.dataset.page === t ? 'block' : 'none'; });
+            panel.querySelectorAll('[data-tab]').forEach(b => { const on = b.dataset.tab === t; b.style.background = on ? '#c8872e' : '#eee'; b.style.color = on ? '#fff' : '#222'; });
+            try { localStorage.setItem('damas.tab', t); } catch (e) {}
+        };
+        const LOOKCOL = ['frame', 'frameColor', 'numberColor', 'hiLast', 'hiSel', 'arrBest', 'arrLast', 'arrW', 'bg'];
+        const sync = () => panel.querySelectorAll('[data-k]').forEach(el => {
+            const k = el.dataset.k;
+            if (k === 'showNumbers') el.checked = this.showNumbers; else if (k === 'showArrow') el.checked = this.showArrow; else if (k === 'focusMode') el.checked = this.focusMode;
+            else if (k === 'boardSize') el.value = this.boardSize;
+            else if (k === 'pieceStyle') el.value = this.pieceStyle; else if (k === 'squareStyle') el.value = this.squareStyle;
+            else if (LOOKCOL.includes(k)) { let v = this.look[k]; if (v === '' || v == null) v = k === 'numberColor' ? '#ffffff' : k === 'hiLast' ? '#9bc700' : k === 'hiSel' ? '#ffff00' : ''; el.value = v; }
+            else el.value = this.colors[k];
+        });
+        const redo = () => { this._deriveStrokes(); this._applyLook(); this._saveCustom(); this.render(); };
         panel.addEventListener('input', (e) => {
             const k = e.target.dataset && e.target.dataset.k; if (!k) return;
-            if (k === 'showNumbers') this.showNumbers = e.target.checked; else if (k === 'showArrow') this.showArrow = e.target.checked; else if (k === 'focusMode') this.focusMode = e.target.checked; else if (k === 'boardSize') this.boardSize = parseInt(e.target.value, 10); else if (k === 'pieceStyle') this.pieceStyle = e.target.value; else if (k === 'squareStyle') this.squareStyle = e.target.value; else this.colors[k] = e.target.value;
-            this._deriveStrokes(); this._saveCustom();
-            if (k === 'focusMode' || k === 'boardSize') { this.applySize(); zoomBtn.textContent = this.focusMode ? '\u{1F50D} Réduire' : '\u{1F50D} Agrandir'; } else this.render();
+            if (k === 'showNumbers') this.showNumbers = e.target.checked; else if (k === 'showArrow') this.showArrow = e.target.checked; else if (k === 'focusMode') this.focusMode = e.target.checked; else if (k === 'boardSize') this.boardSize = parseInt(e.target.value, 10); else if (k === 'pieceStyle') this.pieceStyle = e.target.value; else if (k === 'squareStyle') this.squareStyle = e.target.value;
+            else if (LOOKCOL.includes(k)) this.look[k] = k === 'arrW' ? parseInt(e.target.value, 10) : e.target.value;
+            else this.colors[k] = e.target.value;
+            redo();
+            if (k === 'focusMode' || k === 'boardSize') { this.applySize(); zoomBtn.textContent = this.focusMode ? '\u{1F50D} Réduire' : '\u{1F50D} Agrandir'; }
         });
-        panel.querySelector('[data-reset]').addEventListener('click', () => {
-            for (const k in DEF) { if (k === 'pieceStyle') this.pieceStyle = DEF[k]; else this.colors[k] = DEF[k]; }
-            this.squareStyle = 'flat';
-            this.showNumbers = false; this.showArrow = true; this.boardSize = 560; this.focusMode = false; this._deriveStrokes(); this._saveCustom(); sync(); this.applySize(); zoomBtn.textContent = '\u{1F50D} Agrandir';
+        panel.addEventListener('click', (e) => {
+            const t = e.target.closest('[data-tab]'); if (t) { showTab(t.dataset.tab); return; }
+            const sk = e.target.closest('[data-skin]');
+            if (sk) {
+                const S = SK[sk.dataset.skin];
+                Object.assign(this.colors, S.colors); this.pieceStyle = S.pieceStyle; this.squareStyle = S.squareStyle;
+                this.showNumbers = S.numbers; this.showArrow = true;
+                this.look = Object.assign({}, BoardUI.DEFAULT_LOOK, S.look);
+                redo(); sync(); return;
+            }
+            if (e.target.closest('[data-reset]')) {
+                Object.assign(this.colors, DEF); this.pieceStyle = 'relief'; this.squareStyle = 'flat';
+                this.showNumbers = false; this.showArrow = true; this.boardSize = 560; this.focusMode = false;
+                this.look = Object.assign({}, BoardUI.DEFAULT_LOOK);
+                redo(); sync(); this.applySize(); zoomBtn.textContent = '\u{1F50D} Agrandir'; return;
+            }
         });
-        panel.querySelector('[data-gloss]').addEventListener('click', () => {
-            Object.assign(this.colors, { lightSquare: '#d3a96b', darkSquare: '#c19347', whitePiece: '#1fbf2a', blackPiece: '#1b1b1b', kingMark: '#ffd45a' });
-            this.squareStyle = 'flat'; this.pieceStyle = 'brillant'; this.showNumbers = true; this.showArrow = true;
-            this._deriveStrokes(); this._saveCustom(); sync(); this.render();
+        btn.addEventListener('click', () => {
+            sync();
+            let t = 'skins'; try { t = localStorage.getItem('damas.tab') || 'skins'; } catch (e) {}
+            showTab(t);
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         });
-        panel.querySelector('[data-marble]').addEventListener('click', () => {
-            Object.assign(this.colors, { whitePiece: '#cdd2da', blackPiece: '#d9a62e', kingMark: '#ffe08a' });
-            this.squareStyle = 'marbreNoir'; this.pieceStyle = 'metal'; this.showNumbers = true; this.showArrow = true;
-            this._deriveStrokes(); this._saveCustom(); sync(); this.render();
-        });
-        panel.querySelector('[data-photo]').addEventListener('click', () => {
-            Object.assign(this.colors, { lightSquare: '#1d1d3d', darkSquare: '#dc1f46', whitePiece: '#b9b5ea', blackPiece: '#e51c1c', kingMark: '#FFD700' });
-            this.pieceStyle = 'disc3d'; this.showNumbers = true; this.showArrow = true;
-            this._deriveStrokes(); this._saveCustom(); sync(); this.render();
-        });
-        btn.addEventListener('click', () => { sync(); panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; });
         document.body.appendChild(panel); document.body.appendChild(btn); document.body.appendChild(zoomBtn);
+        this._applyLook();
     }
 
     /**
@@ -910,7 +1064,7 @@ export class BoardUI {
             const y = displayRow * this.squareSize + this.squareSize * 0.04;
             const bg = this.colors.lightSquare; // les pièces se posent sur ces cases
             const lum = parseInt(bg.slice(1, 3), 16) * 0.3 + parseInt(bg.slice(3, 5), 16) * 0.59 + parseInt(bg.slice(5, 7), 16) * 0.11;
-            ctx.fillStyle = lum < 140 ? this._shade(bg, 0.8) : this._shade(bg, -0.6);
+            ctx.fillStyle = this.look.numberColor || (lum < 140 ? this._shade(bg, 0.8) : this._shade(bg, -0.6));
             ctx.fillText(sq.toString(), x, y);
         }
     }
